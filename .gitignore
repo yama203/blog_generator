@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.python/
+.uv
+
+# App bundle (大きいので除外)
+*.app/
+
+# 設定・秘密情報
+config.json
+
+# macOS
+.DS_Store
+
+# ログ
+*.log
