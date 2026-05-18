@@ -1,0 +1,129 @@
+import base64 as _base64
+import re
+
+import requests
+
+_TIMEOUT = 30
+
+
+def _base_url(site: dict) -> str:
+    url = site["url"].strip().rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
+
+
+def _auth(site: dict) -> tuple[str, str]:
+    return (site["username"], site["app_password"])
+
+
+def test_connection(site: dict) -> tuple[bool, str]:
+    """接続・認証を確認。(ok, メッセージ) を返す。"""
+    try:
+        r = requests.get(
+            f"{_base_url(site)}/wp-json/wp/v2/users/me",
+            auth=_auth(site),
+            timeout=_TIMEOUT,
+        )
+        if r.status_code == 200:
+            name = r.json().get("name", "")
+            return True, f"接続OK（{name}）"
+        if r.status_code == 401:
+            return False, "認証エラー: ユーザー名またはアプリケーションパスワードを確認してください"
+        if r.status_code == 404:
+            return False, "REST API が見つかりません。URL またはパーマリンク設定を確認してください"
+        return False, f"エラー: HTTP {r.status_code}"
+    except requests.exceptions.SSLError:
+        return False, "SSL エラー: HTTPS の証明書を確認してください"
+    except requests.exceptions.ConnectionError:
+        return False, "接続できません: URL を確認してください"
+    except Exception as e:
+        return False, f"エラー: {e}"
+
+
+def get_post_types(site: dict) -> dict[str, str]:
+    """
+    REST API に公開されている投稿タイプを返す。
+    {rest_base: 表示名} の辞書。
+    """
+    r = requests.get(
+        f"{_base_url(site)}/wp-json/wp/v2/types",
+        auth=_auth(site),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    result = {}
+    for _slug, info in r.json().items():
+        rest_base = info.get("rest_base", _slug)
+        name = info.get("name", _slug)
+        result[rest_base] = name
+    return result
+
+
+def _upload_media(base_url: str, auth: tuple, image_bytes: bytes, filename: str, mime_type: str) -> str:
+    """画像をメディアライブラリにアップロードし URL を返す。"""
+    r = requests.post(
+        f"{base_url}/wp-json/wp/v2/media",
+        auth=auth,
+        headers={
+            "Content-Type": mime_type,
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+        data=image_bytes,
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json()["source_url"]
+
+
+def publish_article(
+    site: dict,
+    title: str,
+    markdown_str: str,
+    rest_base: str,
+    status: str,
+) -> dict:
+    """
+    WordPress に記事を投稿する。
+    base64 画像はメディアライブラリにアップロードして URL に差し替える。
+    {"id": int, "link": str, "status": str} を返す。
+    """
+    from core.exporter import _md_to_html
+
+    base_url = _base_url(site)
+    auth = _auth(site)
+    counter = [0]
+
+    def _replace_image(m: re.Match) -> str:
+        alt = m.group(1)
+        data_uri = m.group(2)
+        b64_m = re.match(r'data:image/(\w+);base64,(.+)', data_uri, re.DOTALL)
+        if not b64_m:
+            return m.group(0)
+        ext = b64_m.group(1)
+        counter[0] += 1
+        slug = re.sub(r'[^\w]', '_', alt)[:30].strip('_')
+        filename = f"image_{counter[0]:02d}_{slug}.{ext}"
+        img_bytes = _base64.b64decode(b64_m.group(2))
+        media_url = _upload_media(base_url, auth, img_bytes, filename, f"image/{ext}")
+        return f"![{alt}]({media_url})"
+
+    processed_md = re.sub(
+        r'!\[([^\]]*)\]\((data:image/[^\)]{20,})\)',
+        _replace_image,
+        markdown_str,
+    )
+
+    # H1 タイトルを除去（WordPress の title フィールドと重複するため）
+    md_body = re.sub(r'^# .+\n?', '', processed_md, count=1).strip()
+    html = _md_to_html(md_body)
+
+    r = requests.post(
+        f"{base_url}/wp-json/wp/v2/{rest_base}",
+        auth=auth,
+        json={"title": title, "content": html, "status": status},
+        timeout=60,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return {"id": data["id"], "link": data.get("link", ""), "status": data["status"]}
