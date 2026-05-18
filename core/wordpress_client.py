@@ -152,7 +152,7 @@ def publish_article(
             return m.group(0)
         ext = b64_m.group(1)
         counter[0] += 1
-        slug = re.sub(r'[^\w]', '_', alt)[:30].strip('_')
+        slug = re.sub(r'[^\w]', '_', alt, flags=re.ASCII)[:30].strip('_') or 'img'
         filename = f"image_{counter[0]:02d}_{slug}.{ext}"
         img_bytes = _base64.b64decode(b64_m.group(2))
         media_url = _upload_media(base_url, auth, img_bytes, filename, f"image/{ext}")
