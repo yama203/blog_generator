@@ -153,6 +153,7 @@ for key, default in [
     ("edit_display_md", ""),
     ("edit_image_map", {}),
     ("writing_style", list(WRITING_STYLES.keys())[0]),
+    ("manual_edit_saved", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -679,8 +680,11 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             st.session_state.result_markdown = _restored
             if st.session_state.saved_path:
                 update_article(st.session_state.saved_path, _restored)
-            st.toast("✅ 変更を保存しました", icon="✅")
+            st.session_state.manual_edit_saved = True
             st.rerun()
+        if st.session_state.manual_edit_saved:
+            st.session_state.manual_edit_saved = False
+            st.toast("変更を保存しました", icon="✅")
 
     # ── Save to disk ───────────────────────────────────────────────────────────
     st.divider()
