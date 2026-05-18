@@ -151,6 +151,18 @@ for key, default in [
 with st.sidebar:
     st.header("⚙️ 設定")
 
+    if st.session_state.ui_mode == "edit":
+        if st.button("✍️ 新規作成", use_container_width=True):
+            st.session_state.ui_mode = "create"
+            st.session_state.generation_done = False
+            st.session_state.result_markdown = None
+            st.session_state.result_title = None
+            st.session_state.result_keywords = ""
+            st.session_state.saved_path = None
+            st.session_state.editing_mode = False
+            st.rerun()
+        st.divider()
+
     ollama_ok = check_ollama_connection()
     if ollama_ok:
         st.success("Ollama 接続中", icon="✅")
@@ -524,19 +536,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     md_str = st.session_state.result_markdown
 
     # ── Header ─────────────────────────────────────────────────────────────────
-    _title_col, _new_col = st.columns([4, 1])
-    with _title_col:
-        st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
-    with _new_col:
-        if st.button("✍️ 新規作成", use_container_width=True):
-            st.session_state.ui_mode = "create"
-            st.session_state.generation_done = False
-            st.session_state.result_markdown = None
-            st.session_state.result_title = None
-            st.session_state.result_keywords = ""
-            st.session_state.saved_path = None
-            st.session_state.editing_mode = False
-            st.rerun()
+    st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
 
     st.divider()
 
