@@ -679,6 +679,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             st.session_state.result_markdown = _restored
             if st.session_state.saved_path:
                 update_article(st.session_state.saved_path, _restored)
+            st.toast("✅ 変更を保存しました", icon="✅")
             st.rerun()
 
     # ── Save to disk ───────────────────────────────────────────────────────────
