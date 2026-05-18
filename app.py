@@ -774,7 +774,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
         _wp_type_col, _wp_fetch_col, _wp_status_col = st.columns([3, 1, 2])
         with _wp_fetch_col:
-            st.write("")
+            st.markdown('<div style="height:1.7rem"></div>', unsafe_allow_html=True)
             if st.button("取得", key="wp_fetch_types", use_container_width=True,
                          help="サイトの投稿タイプ一覧を取得します"):
                 with st.spinner("取得中..."):
