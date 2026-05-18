@@ -129,7 +129,7 @@ st.markdown(
     .main-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
     .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button > div {
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button > div {
         justify-content: flex-start; text-align: left;
     }
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button p {
