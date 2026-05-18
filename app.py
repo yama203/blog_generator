@@ -549,42 +549,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     tab_preview, tab_raw = st.tabs(["プレビュー", "Markdown ソース"])
 
     with tab_preview:
-        if st.session_state.editing_mode:
-            edited_md = st.text_area(
-                "編集",
-                value=st.session_state.edit_display_md,
-                height=600,
-                label_visibility="collapsed",
-                key="edit_area",
-            )
-            if st.session_state.edit_image_map:
-                st.caption(
-                    "📷 " + "　".join(
-                        f"`{k}` = 画像{i+1}"
-                        for i, k in enumerate(st.session_state.edit_image_map)
-                    )
-                )
-            _save_col2, _cancel_col = st.columns(2)
-            with _save_col2:
-                if st.button("💾 変更を保存", type="primary", use_container_width=True, key="edit_save"):
-                    restored = _restore_images_after_edit(edited_md, st.session_state.edit_image_map)
-                    st.session_state.result_markdown = restored
-                    st.session_state.editing_mode = False
-                    if st.session_state.saved_path:
-                        update_article(st.session_state.saved_path, restored)
-                    st.rerun()
-            with _cancel_col:
-                if st.button("キャンセル", use_container_width=True, key="edit_cancel"):
-                    st.session_state.editing_mode = False
-                    st.rerun()
-        else:
-            if st.button("✏️ 編集", key="edit_btn"):
-                stripped, image_map = _strip_images_for_edit(md_str)
-                st.session_state.edit_display_md = stripped
-                st.session_state.edit_image_map = image_map
-                st.session_state.editing_mode = True
-                st.rerun()
-            st.markdown(md_str)
+        st.markdown(md_str)
 
     with tab_raw:
         st.text_area(
@@ -692,6 +657,29 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"画像の再生成に失敗しました: {e}")
+
+    with st.expander("✏️ 手動で編集する"):
+        _stripped, _image_map = _strip_images_for_edit(md_str)
+        _edited_md = st.text_area(
+            "手動編集",
+            value=_stripped,
+            height=500,
+            label_visibility="collapsed",
+            key="manual_edit_area",
+        )
+        if _image_map:
+            st.caption(
+                "📷 " + "　".join(
+                    f"`{k}` = 画像{i+1}"
+                    for i, k in enumerate(_image_map)
+                )
+            )
+        if st.button("💾 変更を保存", type="primary", key="manual_edit_save"):
+            _restored = _restore_images_after_edit(_edited_md, _image_map)
+            st.session_state.result_markdown = _restored
+            if st.session_state.saved_path:
+                update_article(st.session_state.saved_path, _restored)
+            st.rerun()
 
     # ── Save to disk ───────────────────────────────────────────────────────────
     st.divider()
