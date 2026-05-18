@@ -556,103 +556,6 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     if st.session_state.saved_path:
         st.caption(f"📁 {st.session_state.saved_path}")
 
-    # ── Download ───────────────────────────────────────────────────────────────
-    st.subheader("⬇️ ダウンロード")
-    col_md, col_wp, col_sp = st.columns(3)
-
-    with col_md:
-        st.download_button(
-            "📄 Markdown",
-            data=md_str,
-            file_name=f"{slug}.md",
-            mime="text/markdown",
-            use_container_width=True,
-            help="汎用 Markdown ファイル。Hugo や Notion などにも使えます。",
-        )
-    with col_wp:
-        st.download_button(
-            "🔵 WordPress ZIP",
-            data=_wordpress_zip(raw_title, md_str),
-            file_name=f"{slug}_wordpress.zip",
-            mime="application/zip",
-            use_container_width=True,
-            help="post.html + images/ フォルダを含む ZIP。画像をメディアライブラリにアップロードし、post.html の URL を差し替えてから貼り付けてください。",
-        )
-    with col_sp:
-        st.download_button(
-            "🟢 Shopify ZIP",
-            data=_shopify_zip(raw_title, md_str),
-            file_name=f"{slug}_shopify.zip",
-            mime="application/zip",
-            use_container_width=True,
-            help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
-        )
-
-    # ── WordPress publish ──────────────────────────────────────────────────────
-    st.divider()
-    st.subheader("🌐 WordPress に投稿")
-
-    _wp_sites = list_wordpress_sites()
-    if not _wp_sites:
-        st.info("サイドバーの「WordPress 設定」からサイトを登録してください。", icon="ℹ️")
-    else:
-        _wp_site_names = [s["name"] for s in _wp_sites]
-        _wp_sel_col, _wp_test_col = st.columns([4, 1])
-        with _wp_sel_col:
-            _wp_selected_name = st.selectbox(
-                "投稿先サイト", _wp_site_names, key="wp_site_select", label_visibility="collapsed"
-            )
-        _wp_site = next(s for s in _wp_sites if s["name"] == _wp_selected_name)
-        with _wp_test_col:
-            if st.button("接続テスト", key="wp_test_btn", use_container_width=True):
-                with st.spinner("確認中..."):
-                    _ok, _msg = test_connection(_wp_site)
-                    (st.success if _ok else st.error)(_msg, icon="✅" if _ok else "❌")
-
-        _pt_cache_key = f"wp_types_{_wp_selected_name}"
-        if _pt_cache_key not in st.session_state:
-            st.session_state[_pt_cache_key] = {"posts": "投稿"}
-
-        _wp_type_col, _wp_fetch_col, _wp_status_col = st.columns([3, 1, 2])
-        with _wp_fetch_col:
-            st.write("")
-            if st.button("取得", key="wp_fetch_types", use_container_width=True,
-                         help="サイトの投稿タイプ一覧を取得します"):
-                with st.spinner("取得中..."):
-                    try:
-                        st.session_state[_pt_cache_key] = get_post_types(_wp_site)
-                    except Exception as _e:
-                        st.error(f"取得失敗: {_e}")
-        with _wp_type_col:
-            _available_types = st.session_state[_pt_cache_key]
-            _wp_rest_base = st.selectbox(
-                "投稿タイプ",
-                options=list(_available_types.keys()),
-                format_func=lambda k: f"{_available_types[k]}（{k}）",
-                key="wp_post_type_select",
-            )
-        with _wp_status_col:
-            _status_map = {
-                "下書き": "draft",
-                "公開": "publish",
-                "レビュー待ち": "pending",
-                "非公開": "private",
-            }
-            _wp_status = _status_map[st.selectbox(
-                "ステータス", list(_status_map.keys()), key="wp_status_select"
-            )]
-
-        if st.button("📤 WordPress に投稿する", type="primary", key="wp_publish_btn", use_container_width=True):
-            with st.spinner("投稿中... 画像をアップロードしています"):
-                try:
-                    _result = publish_article(_wp_site, raw_title, md_str, _wp_rest_base, _wp_status)
-                    _label = {v: k for k, v in _status_map.items()}.get(_result["status"], _result["status"])
-                    st.success(f"投稿しました！（{_label}）", icon="✅")
-                    if _result["link"]:
-                        st.markdown(f"[投稿を確認する →]({_result['link']})")
-                except Exception as _e:
-                    st.error(f"投稿に失敗しました: {_e}")
-
     # ── Preview / Edit / Raw ───────────────────────────────────────────────────
     st.divider()
     tab_preview, tab_raw = st.tabs(["プレビュー", "Markdown ソース"])
@@ -802,3 +705,101 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.rerun()
                         except Exception as e:
                             st.error(f"画像の再生成に失敗しました: {e}")
+
+    # ── Download ───────────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("⬇️ ダウンロード")
+    col_md, col_wp, col_sp = st.columns(3)
+
+    with col_md:
+        st.download_button(
+            "📄 Markdown",
+            data=md_str,
+            file_name=f"{slug}.md",
+            mime="text/markdown",
+            use_container_width=True,
+            help="汎用 Markdown ファイル。Hugo や Notion などにも使えます。",
+        )
+    with col_wp:
+        st.download_button(
+            "🔵 WordPress ZIP",
+            data=_wordpress_zip(raw_title, md_str),
+            file_name=f"{slug}_wordpress.zip",
+            mime="application/zip",
+            use_container_width=True,
+            help="post.html + images/ フォルダを含む ZIP。画像をメディアライブラリにアップロードし、post.html の URL を差し替えてから貼り付けてください。",
+        )
+    with col_sp:
+        st.download_button(
+            "🟢 Shopify ZIP",
+            data=_shopify_zip(raw_title, md_str),
+            file_name=f"{slug}_shopify.zip",
+            mime="application/zip",
+            use_container_width=True,
+            help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
+        )
+
+    # ── WordPress publish ──────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("🌐 WordPress に投稿")
+
+    _wp_sites = list_wordpress_sites()
+    if not _wp_sites:
+        st.info("サイドバーの「WordPress 設定」からサイトを登録してください。", icon="ℹ️")
+    else:
+        _wp_site_names = [s["name"] for s in _wp_sites]
+        _wp_sel_col, _wp_test_col = st.columns([4, 1])
+        with _wp_sel_col:
+            _wp_selected_name = st.selectbox(
+                "投稿先サイト", _wp_site_names, key="wp_site_select", label_visibility="collapsed"
+            )
+        _wp_site = next(s for s in _wp_sites if s["name"] == _wp_selected_name)
+        with _wp_test_col:
+            if st.button("接続テスト", key="wp_test_btn", use_container_width=True):
+                with st.spinner("確認中..."):
+                    _ok, _msg = test_connection(_wp_site)
+                    (st.success if _ok else st.error)(_msg, icon="✅" if _ok else "❌")
+
+        _pt_cache_key = f"wp_types_{_wp_selected_name}"
+        if _pt_cache_key not in st.session_state:
+            st.session_state[_pt_cache_key] = {"posts": "投稿"}
+
+        _wp_type_col, _wp_fetch_col, _wp_status_col = st.columns([3, 1, 2])
+        with _wp_fetch_col:
+            st.write("")
+            if st.button("取得", key="wp_fetch_types", use_container_width=True,
+                         help="サイトの投稿タイプ一覧を取得します"):
+                with st.spinner("取得中..."):
+                    try:
+                        st.session_state[_pt_cache_key] = get_post_types(_wp_site)
+                    except Exception as _e:
+                        st.error(f"取得失敗: {_e}")
+        with _wp_type_col:
+            _available_types = st.session_state[_pt_cache_key]
+            _wp_rest_base = st.selectbox(
+                "投稿タイプ",
+                options=list(_available_types.keys()),
+                format_func=lambda k: f"{_available_types[k]}（{k}）",
+                key="wp_post_type_select",
+            )
+        with _wp_status_col:
+            _status_map = {
+                "下書き": "draft",
+                "公開": "publish",
+                "レビュー待ち": "pending",
+                "非公開": "private",
+            }
+            _wp_status = _status_map[st.selectbox(
+                "ステータス", list(_status_map.keys()), key="wp_status_select"
+            )]
+
+        if st.button("📤 WordPress に投稿する", type="primary", key="wp_publish_btn", use_container_width=True):
+            with st.spinner("投稿中... 画像をアップロードしています"):
+                try:
+                    _result = publish_article(_wp_site, raw_title, md_str, _wp_rest_base, _wp_status)
+                    _label = {v: k for k, v in _status_map.items()}.get(_result["status"], _result["status"])
+                    st.success(f"投稿しました！（{_label}）", icon="✅")
+                    if _result["link"]:
+                        st.markdown(f"[投稿を確認する →]({_result['link']})")
+                except Exception as _e:
+                    st.error(f"投稿に失敗しました: {_e}")
