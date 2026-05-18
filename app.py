@@ -540,24 +540,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     st.divider()
 
-    # ── Save to disk ───────────────────────────────────────────────────────────
-    _save_col, _status_col = st.columns([1, 3])
-    with _save_col:
-        if st.button("💾 記事を保存", use_container_width=True, type="secondary"):
-            if st.session_state.saved_path:
-                update_article(st.session_state.saved_path, md_str)
-                _save_msg = "上書き保存しました"
-            else:
-                _p = save_article(raw_title, md_str, saved_keywords)
-                st.session_state.saved_path = _p
-                _save_msg = "保存しました"
-            with _status_col:
-                st.success(_save_msg, icon="✅")
-    if st.session_state.saved_path:
-        st.caption(f"📁 {st.session_state.saved_path}")
-
     # ── Preview / Edit / Raw ───────────────────────────────────────────────────
-    st.divider()
     tab_preview, tab_raw = st.tabs(["プレビュー", "Markdown ソース"])
 
     with tab_preview:
@@ -705,6 +688,23 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.rerun()
                         except Exception as e:
                             st.error(f"画像の再生成に失敗しました: {e}")
+
+    # ── Save to disk ───────────────────────────────────────────────────────────
+    st.divider()
+    _save_col, _status_col = st.columns([1, 3])
+    with _save_col:
+        if st.button("💾 記事を保存", use_container_width=True, type="secondary"):
+            if st.session_state.saved_path:
+                update_article(st.session_state.saved_path, md_str)
+                _save_msg = "上書き保存しました"
+            else:
+                _p = save_article(raw_title, md_str, saved_keywords)
+                st.session_state.saved_path = _p
+                _save_msg = "保存しました"
+            with _status_col:
+                st.success(_save_msg, icon="✅")
+    if st.session_state.saved_path:
+        st.caption(f"📁 {st.session_state.saved_path}")
 
     # ── Download ───────────────────────────────────────────────────────────────
     st.divider()
