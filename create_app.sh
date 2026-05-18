@@ -89,7 +89,9 @@ if [ -z "$PROJECT_DIR" ] || [ ! -d "$PROJECT_DIR" ]; then
 fi
 
 # ── ソースファイルを常に同期（バグ修正が即時反映されるよう）──
-rsync -a --checksum \
+# --checksum だけだと mtime が異なる場合にスキップされる可能性があるため
+# --ignore-times を加えて必ずチェックサムで比較・上書きする
+rsync -a --checksum --ignore-times \
     --exclude='.venv/' \
     --exclude='.python/' \
     --exclude='.uv' \
