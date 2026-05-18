@@ -131,6 +131,13 @@ SECTION_LENGTHS: dict[str, str] = {
     "詳細（約1300字）":   "700-1000 words",
 }
 
+WRITING_STYLES: dict[str, str] = {
+    "丁寧（です・ます調）":        "Use polite, professional tone throughout (です・ます調 for Japanese). Consistent formal-yet-approachable register. Never mix in だ・である endings.",
+    "フレンドリー（です・ます調）": "Use warm, friendly tone throughout (やわらかいです・ます調 for Japanese). Encouraging and approachable like a knowledgeable friend. Keep です・ます endings; avoid stiff expressions.",
+    "解説・論文調（だ・である調）": "Use authoritative, informational tone throughout (だ・である調 for Japanese). Clear and confident like a journalist or textbook. No です・ます endings.",
+    "カジュアル（話し言葉風）":     "Use casual, conversational tone throughout. Write as if speaking directly to the reader using natural, informal expressions.",
+}
+
 
 def generate_section(
     title: str,
@@ -140,9 +147,11 @@ def generate_section(
     language: str = "日本語",
     rich_format: bool = True,
     section_length: str = "標準（約600字）",
+    writing_style: str = "丁寧（です・ます調）",
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
     word_range = SECTION_LENGTHS.get(section_length, "300-500 words")
+    style_instr = WRITING_STYLES.get(writing_style, list(WRITING_STYLES.values())[0])
     format_instruction = (
         """Format using Markdown to improve readability:
 - Use **bold** to highlight key terms and important concepts
@@ -157,6 +166,7 @@ def generate_section(
 Blog title: {title}
 Section: {section_title}
 Keywords: {keywords}
+Tone/Style: {style_instr}
 
 Write {word_range}. Output only the content text, no headings.
 {format_instruction}"""
@@ -227,8 +237,10 @@ def revise_article(
     model: str,
     language: str = "日本語",
     section_index: int | None = None,
+    writing_style: str = "丁寧（です・ます調）",
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
+    style_instr = WRITING_STYLES.get(writing_style, list(WRITING_STYLES.values())[0])
 
     # Always strip base64 images before sending to LLM
     stripped, placeholders = _strip_images(markdown)
@@ -242,6 +254,7 @@ def revise_article(
         prompt = f"""You are a professional blog editor. Revise ONLY the section content below {lang} based on the instruction. Output ONLY the revised content (no heading, no explanation).
 
 Instruction: {instruction}
+Tone/Style to maintain: {style_instr}
 
 Section heading: {target['heading']}
 Current content:
@@ -253,6 +266,7 @@ Current content:
         prompt = f"""You are a professional blog editor. Revise the article below {lang} based on the instruction. Output ONLY the complete revised article in Markdown. No explanation, no preamble.
 
 Instruction: {instruction}
+Tone/Style to maintain: {style_instr}
 
 Article:
 {stripped}"""

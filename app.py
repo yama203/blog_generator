@@ -88,6 +88,8 @@ from core.article_store import (
 )
 from core.text_generator import (
     RECOMMENDED_MODELS,
+    SECTION_LENGTHS,
+    WRITING_STYLES,
     check_ollama_connection,
     generate_image_prompt,
     generate_outline,
@@ -143,6 +145,7 @@ for key, default in [
     ("editing_mode", False),
     ("edit_display_md", ""),
     ("edit_image_map", {}),
+    ("writing_style", list(WRITING_STYLES.keys())[0]),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -371,8 +374,12 @@ if st.session_state.ui_mode == "create":
             help="記事の見出し（H2）の数です。目安: 短め=2〜3、標準=4〜5、詳細=6〜8",
         )
         language = st.selectbox("記事の言語", ["日本語", "English"])
+        writing_style = st.selectbox(
+            "文体",
+            list(WRITING_STYLES.keys()),
+            index=list(WRITING_STYLES.keys()).index(st.session_state.writing_style),
+        )
 
-        from core.text_generator import SECTION_LENGTHS
         LENGTH_OPTIONS = list(SECTION_LENGTHS.keys())
         section_length = st.select_slider(
             "セクションの文字数",
@@ -458,6 +465,7 @@ if st.session_state.ui_mode == "create":
         st.session_state.result_markdown = None
         st.session_state.saved_path = None
         st.session_state.editing_mode = False
+        st.session_state.writing_style = writing_style
 
         with st.status("生成中...", expanded=True) as status:
             try:
@@ -474,7 +482,7 @@ if st.session_state.ui_mode == "create":
                     st.write(f"✏️ セクション [{i + 1}/{len(sections_list)}] 執筆中: {section_title}")
                     content = generate_section(
                         title, section_title, keywords,
-                        text_model, language, rich_format, section_length
+                        text_model, language, rich_format, section_length, writing_style
                     )
                     img_prompt = None
                     if use_images and i < len(user_section_gen_images) and user_section_gen_images[i]:
@@ -598,7 +606,10 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not ollama_ok):
         with st.spinner("修正中..."):
             try:
-                revised = revise_article(md_str, revision_prompt, text_model, language, _section_index)
+                revised = revise_article(
+                    md_str, revision_prompt, text_model, language,
+                    _section_index, st.session_state.writing_style,
+                )
                 st.session_state.result_markdown = revised
                 if st.session_state.saved_path:
                     update_article(st.session_state.saved_path, revised)
