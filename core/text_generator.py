@@ -180,3 +180,82 @@ Content preview: {content[:300]}
 
 {style_instruction}"""
     return _generate(prompt, model).strip().strip('"').strip("'")
+
+
+def _strip_images(markdown: str) -> tuple[str, dict]:
+    """Replace base64 image tags with short placeholders to keep LLM context small."""
+    import re
+    placeholders: dict[str, str] = {}
+
+    def _replace(m: re.Match) -> str:
+        key = f"__IMG_{len(placeholders)}__"
+        placeholders[key] = m.group(0)
+        return key
+
+    stripped = re.sub(r'!\[[^\]]*\]\(data:image/[^\)]{20,}\)', _replace, markdown)
+    return stripped, placeholders
+
+
+def _restore_images(markdown: str, placeholders: dict) -> str:
+    for key, original in placeholders.items():
+        markdown = markdown.replace(key, original)
+    return markdown
+
+
+def _parse_sections(markdown: str) -> tuple[str, list[dict]]:
+    """Split markdown into (preamble, [{heading, body}, ...]) on ## boundaries."""
+    import re
+    parts = re.split(r'\n(?=## )', "\n" + markdown)
+    preamble = parts[0].strip()
+    sections = []
+    for part in parts[1:]:
+        head, _, body = part.strip().partition("\n")
+        sections.append({"heading": head, "body": body.strip()})
+    return preamble, sections
+
+
+def _assemble_sections(preamble: str, sections: list[dict]) -> str:
+    parts = [preamble] if preamble else []
+    for sec in sections:
+        parts.append(f"\n{sec['heading']}\n\n{sec['body']}")
+    return "\n".join(parts)
+
+
+def revise_article(
+    markdown: str,
+    instruction: str,
+    model: str,
+    language: str = "日本語",
+    section_index: int | None = None,
+) -> str:
+    lang = "in Japanese" if language == "日本語" else "in English"
+
+    # Always strip base64 images before sending to LLM
+    stripped, placeholders = _strip_images(markdown)
+
+    if section_index is not None:
+        # Revise only the target section, keep the rest untouched
+        preamble, sections = _parse_sections(stripped)
+        if section_index >= len(sections):
+            raise ValueError(f"セクション {section_index + 1} が存在しません")
+        target = sections[section_index]
+        prompt = f"""You are a professional blog editor. Revise ONLY the section content below {lang} based on the instruction. Output ONLY the revised content (no heading, no explanation).
+
+Instruction: {instruction}
+
+Section heading: {target['heading']}
+Current content:
+{target['body']}"""
+        revised_body = _generate(prompt, model).strip()
+        sections[section_index]["body"] = revised_body
+        result = _assemble_sections(preamble, sections)
+    else:
+        prompt = f"""You are a professional blog editor. Revise the article below {lang} based on the instruction. Output ONLY the complete revised article in Markdown. No explanation, no preamble.
+
+Instruction: {instruction}
+
+Article:
+{stripped}"""
+        result = _generate(prompt, model).strip()
+
+    return _restore_images(result, placeholders)

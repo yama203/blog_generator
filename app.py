@@ -1,10 +1,91 @@
+import re
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
 from core.assembler import assemble_markdown
-from core.exporter import to_shopify_csv, to_shopify_html, to_wordpress_html
+from core.exporter import to_shopify_zip, to_wordpress_zip
+
+
+@st.cache_data(show_spinner=False)
+def _wordpress_zip(title: str, md: str) -> bytes:
+    return to_wordpress_zip(title, md)
+
+
+@st.cache_data(show_spinner=False)
+def _shopify_zip(title: str, md: str) -> bytes:
+    return to_shopify_zip(title, md)
+
+
+def _strip_images_for_edit(markdown: str) -> tuple[str, dict]:
+    placeholders: dict[str, str] = {}
+    counter = [0]
+
+    def _replace(m: re.Match) -> str:
+        counter[0] += 1
+        key = f"IMAGE_{counter[0]}"
+        placeholders[key] = m.group(0)
+        return f"![{m.group(1)}]({key})"
+
+    stripped = re.sub(r'!\[([^\]]*)\]\(data:image/[^\)]{20,}\)', _replace, markdown)
+    return stripped, placeholders
+
+
+def _extract_section_body(markdown: str, heading: str) -> str:
+    """指定した H2 セクションのテキスト本文を返す（画像タグは除去）。"""
+    parts = re.split(r'\n## ', '\n' + markdown)
+    for part in parts[1:]:
+        head, _, body = part.partition('\n')
+        if head.strip() == heading.strip():
+            return re.sub(r'!\[[^\]]*\]\([^\)]{20,}\)', '', body).strip()[:500]
+    return ""
+
+
+def _replace_section_image(markdown: str, heading: str, data_uri: str) -> str:
+    """指定セクションの画像を差し替える（画像なしなら見出し直後に挿入）。"""
+    esc = re.escape(heading)
+    new_tag = f"![{heading}]({data_uri})"
+
+    # 既存の画像を置き換え
+    result, n = re.subn(
+        rf'(## {esc}\n+)!\[[^\]]*\]\(data:image/[^\)]+\)',
+        rf'\g<1>{new_tag}',
+        markdown, count=1,
+    )
+    if n:
+        return result
+
+    # 画像なし → 見出し直後に挿入
+    result, n = re.subn(
+        rf'(## {esc}\n+)',
+        rf'\g<1>{new_tag}\n\n',
+        markdown, count=1,
+    )
+    return result if n else markdown
+
+
+def _restore_images_after_edit(edited: str, placeholders: dict) -> str:
+    for key, original_tag in placeholders.items():
+        m = re.match(r'!\[[^\]]*\]\((data:image/[^\)]+)\)', original_tag)
+        if not m:
+            continue
+        data_url = m.group(1)
+        edited = re.sub(
+            rf'!\[([^\]]*)\]\({re.escape(key)}\)',
+            lambda mm, url=data_url: f'![{mm.group(1)}]({url})',
+            edited,
+        )
+    return edited
+
+
+from core.article_store import (
+    delete_article,
+    list_articles,
+    load_article,
+    save_article,
+    update_article,
+)
 from core.text_generator import (
     RECOMMENDED_MODELS,
     check_ollama_connection,
@@ -13,6 +94,7 @@ from core.text_generator import (
     generate_section,
     list_ollama_models,
     pull_model,
+    revise_article,
 )
 
 try:
@@ -35,6 +117,7 @@ st.markdown(
     """
     <style>
     .main-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
     </style>
     """,
@@ -43,17 +126,18 @@ st.markdown(
 
 # ── Session state ──────────────────────────────────────────────────────────────
 for key, default in [
+    ("ui_mode", "create"),       # "create" | "edit"
     ("result_markdown", None),
     ("result_title", None),
     ("result_keywords", ""),
     ("generation_done", False),
+    ("saved_path", None),
+    ("editing_mode", False),
+    ("edit_display_md", ""),
+    ("edit_image_map", {}),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
-
-# ── Title ──────────────────────────────────────────────────────────────────────
-st.markdown('<p class="main-title">✍️ AI ブログジェネレーター</p>', unsafe_allow_html=True)
-st.caption("キーワードを入力するだけで、AIがブログ記事（本文＋画像）を自動生成します。")
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -72,7 +156,6 @@ with st.sidebar:
         st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
         text_model = list(RECOMMENDED_MODELS.keys())[0]
 
-    # ── Model management ───────────────────────────────────────────────────────
     with st.expander("📥 モデルを追加"):
         already = set(list_ollama_models()) if ollama_ok else set()
         model_choice = st.selectbox(
@@ -170,153 +253,268 @@ with st.sidebar:
     if use_images:
         st.caption("💡 **料金目安**\n\n- 標準: $0.04/枚\n- 高品質(HD): $0.08/枚\n- 画像3枚の記事: $0.12〜$0.24")
 
-# ── Input form ─────────────────────────────────────────────────────────────────
-col_left, col_right = st.columns([3, 1])
-
-with col_left:
-    user_title = st.text_input(
-        "タイトル",
-        placeholder="例：はじめての機械学習入門ガイド（空欄 → AI が自動生成）",
-        help="タイトルを決めている場合はここに入力してください。空欄にすると AI がキーワードからタイトルを考えます。",
-    )
-    keywords = st.text_input(
-        "キーワード",
-        placeholder="例：Python、機械学習、初心者向け",
-        help="記事のテーマとなる単語をカンマ区切りで入力してください。タイトルを入力した場合は省略できます。",
-    )
-
-    # Dynamic validation hint
-    if not keywords.strip() and not user_title.strip():
-        st.caption("※ キーワードまたはタイトルのどちらか一方は必須です。")
-    elif not keywords.strip():
-        st.caption("✅ タイトルが入力されています。キーワードは省略可能です。")
-    elif not user_title.strip():
-        st.caption("✅ キーワードをもとに AI がタイトルを自動生成します。")
+    # ── Saved articles ─────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("📂 保存済み記事")
+    _articles = list_articles()
+    if not _articles:
+        st.caption("保存された記事はまだありません。")
     else:
-        st.caption("✅ タイトルとキーワードの両方が入力されています。")
+        for _art in _articles:
+            st.markdown(f"**{_art['title']}**")
+            if _art["created"]:
+                st.caption(_art["created"][:10])
+            _c1, _c2 = st.columns([3, 1])
+            with _c1:
+                if st.button("読み込む", key=f"load_{_art['filename']}", use_container_width=True):
+                    _data = load_article(_art["path"])
+                    st.session_state.result_markdown = _data["markdown"]
+                    st.session_state.result_title = _data["title"]
+                    st.session_state.result_keywords = _data["keywords"]
+                    st.session_state.generation_done = True
+                    st.session_state.saved_path = _art["path"]
+                    st.session_state.editing_mode = False
+                    st.session_state.ui_mode = "edit"
+                    st.rerun()
+            with _c2:
+                if st.button("🗑️", key=f"del_{_art['filename']}", use_container_width=True,
+                             help="この記事を削除"):
+                    delete_article(_art["path"])
+                    if st.session_state.saved_path == _art["path"]:
+                        st.session_state.saved_path = None
+                    st.rerun()
+            st.divider()
 
-with col_right:
-    num_sections = st.number_input(
-        "セクション数",
-        min_value=2, max_value=8, value=3, step=1,
-        help="記事の見出し（H2）の数です。目安: 短め=2〜3、標準=4〜5、詳細=6〜8",
-    )
-    language = st.selectbox("記事の言語", ["日本語", "English"])
+# ══════════════════════════════════════════════════════════════════════════════
+# CREATE MODE
+# ══════════════════════════════════════════════════════════════════════════════
+if st.session_state.ui_mode == "create":
+    st.markdown('<p class="main-title">✍️ AI ブログジェネレーター</p>', unsafe_allow_html=True)
+    st.caption("キーワードを入力するだけで、AIがブログ記事（本文＋画像）を自動生成します。")
 
-    from core.text_generator import SECTION_LENGTHS
-    LENGTH_OPTIONS = list(SECTION_LENGTHS.keys())
-    section_length = st.select_slider(
-        "セクションの文字数",
-        options=LENGTH_OPTIONS,
-        value=LENGTH_OPTIONS[2],
-        help="セクション（見出し1つ）あたりのおおよその文字数です。",
-    )
+    # ── Input form ─────────────────────────────────────────────────────────────
+    col_left, col_right = st.columns([3, 1])
 
-    st.write("")
-    rich_format = st.toggle(
-        "リッチフォーマット",
-        value=True,
-        help="ON: 太字・箇条書き・引用ブロックを使って読みやすく整形 / OFF: シンプルな段落のみ",
-    )
-    include_toc = st.toggle(
-        "目次を生成する",
-        value=False,
-        help="ON: 記事の冒頭に目次（各セクションへのリンク）を挿入します。",
-    )
-
-with st.expander("📝 セクションの見出しを指定する（任意）"):
-    st.caption("空欄のセクションは AI が自動で見出しを生成します。")
-    user_sections: list[str] = []
-    for _i in range(int(num_sections)):
-        user_sections.append(
-            st.text_input(
-                f"セクション {_i + 1}",
-                placeholder="空欄 → AI が自動生成",
-                key=f"section_heading_{_i}",
-                label_visibility="visible",
-            )
+    with col_left:
+        user_title = st.text_input(
+            "タイトル",
+            placeholder="例：はじめての機械学習入門ガイド（空欄 → AI が自動生成）",
+            help="タイトルを決めている場合はここに入力してください。空欄にすると AI がキーワードからタイトルを考えます。",
+        )
+        keywords = st.text_input(
+            "キーワード",
+            placeholder="例：Python、機械学習、初心者向け",
+            help="記事のテーマとなる単語をカンマ区切りで入力してください。タイトルを入力した場合は省略できます。",
         )
 
-st.divider()
+        if not keywords.strip() and not user_title.strip():
+            st.caption("※ キーワードまたはタイトルのどちらか一方は必須です。")
+        elif not keywords.strip():
+            st.caption("✅ タイトルが入力されています。キーワードは省略可能です。")
+        elif not user_title.strip():
+            st.caption("✅ キーワードをもとに AI がタイトルを自動生成します。")
+        else:
+            st.caption("✅ タイトルとキーワードの両方が入力されています。")
 
-# ── Generate ───────────────────────────────────────────────────────────────────
-has_input = bool(keywords.strip() or user_title.strip())
+    with col_right:
+        num_sections = st.number_input(
+            "セクション数",
+            min_value=2, max_value=8, value=3, step=1,
+            help="記事の見出し（H2）の数です。目安: 短め=2〜3、標準=4〜5、詳細=6〜8",
+        )
+        language = st.selectbox("記事の言語", ["日本語", "English"])
 
-generate_clicked = st.button(
-    "🚀 ブログを生成する",
-    type="primary",
-    disabled=not ollama_ok or not has_input,
-    use_container_width=True,
-)
+        from core.text_generator import SECTION_LENGTHS
+        LENGTH_OPTIONS = list(SECTION_LENGTHS.keys())
+        section_length = st.select_slider(
+            "セクションの文字数",
+            options=LENGTH_OPTIONS,
+            value=LENGTH_OPTIONS[2],
+            help="セクション（見出し1つ）あたりのおおよその文字数です。",
+        )
 
-if generate_clicked and has_input:
-    st.session_state.generation_done = False
-    st.session_state.result_markdown = None
+        st.write("")
+        rich_format = st.toggle(
+            "リッチフォーマット",
+            value=True,
+            help="ON: 太字・箇条書き・引用ブロックを使って読みやすく整形 / OFF: シンプルな段落のみ",
+        )
+        include_toc = st.toggle(
+            "目次を生成する",
+            value=False,
+            help="ON: 記事の冒頭に目次（各セクションへのリンク）を挿入します。",
+        )
 
-    with st.status("生成中...", expanded=True) as status:
-        try:
-            # 1. Outline
-            st.write("📋 アウトラインを生成中...")
-            outline = generate_outline(
-                keywords, int(num_sections), text_model, language, user_title, user_sections
-            )
-            title: str = outline["title"]
-            sections_list: list[str] = outline["sections"]
-            st.write(f"✅ タイトル決定: **{title}**")
-
-            # 2. Section content (+ image prompts)
-            sections_data: list[dict] = []
-            for i, section_title in enumerate(sections_list):
-                st.write(f"✏️ セクション [{i + 1}/{len(sections_list)}] 執筆中: {section_title}")
-                content = generate_section(
-                    title, section_title, keywords,
-                    text_model, language, rich_format, section_length
+    with st.expander("📝 セクションの見出し・画像を指定する（任意）"):
+        st.caption("見出しが空欄のセクションは AI が自動生成します。画像プロンプトも空欄なら AI が自動生成します。")
+        user_sections: list[str] = []
+        user_section_gen_images: list[bool] = []
+        user_section_img_prompts: list[str] = []
+        for _i in range(int(num_sections)):
+            if _i > 0:
+                st.divider()
+            st.markdown(f"**セクション {_i + 1}**")
+            if use_images:
+                _h_col, _img_col = st.columns([3, 1])
+                with _h_col:
+                    user_sections.append(
+                        st.text_input(
+                            "見出し",
+                            placeholder="空欄 → AI が自動生成",
+                            key=f"section_heading_{_i}",
+                            label_visibility="visible",
+                        )
+                    )
+                with _img_col:
+                    st.write("")
+                    _gen = st.checkbox("画像を生成", value=True, key=f"section_gen_img_{_i}")
+            else:
+                user_sections.append(
+                    st.text_input(
+                        "見出し",
+                        placeholder="空欄 → AI が自動生成",
+                        key=f"section_heading_{_i}",
+                        label_visibility="visible",
+                    )
                 )
-                img_prompt = None
-                if use_images:
-                    img_prompt = generate_image_prompt(section_title, content, text_model)
-                sections_data.append(
-                    {"heading": section_title, "content": content, "image_prompt": img_prompt, "image_path": None}
-                )
+            if use_images:
+                user_section_gen_images.append(_gen)
+                if _gen:
+                    user_section_img_prompts.append(
+                        st.text_input(
+                            "画像プロンプト（任意・英語）",
+                            placeholder="空欄 → AI が自動生成",
+                            key=f"section_img_prompt_{_i}",
+                            label_visibility="visible",
+                        )
+                    )
+                else:
+                    user_section_img_prompts.append("")
+            else:
+                user_section_gen_images.append(False)
+                user_section_img_prompts.append("")
 
-            # 3. Image generation
-            with tempfile.TemporaryDirectory() as tmpdir:
-                if use_images:
-                    if not openai_api_key:
-                        raise ValueError("OpenAI API キーが入力されていません。サイドバーで設定してください。")
-                    st.write("🎨 画像を生成中...")
-                    img_gen = DalleGenerator(openai_api_key, image_quality)
-                    for i, sec in enumerate(sections_data):
-                        st.write(f"🖼️ 画像 [{i + 1}/{len(sections_data)}] 生成中...")
-                        img_path = Path(tmpdir) / f"img_{i}.png"
-                        img_gen.generate(sec["image_prompt"], img_path)
-                        sec["image_path"] = img_path
-
-                # 5. Assemble
-                st.write("📄 Markdown を組み立て中...")
-                result = assemble_markdown(title, sections_data, include_toc, language)
-
-            st.session_state.result_markdown = result
-            st.session_state.result_title = title
-            st.session_state.result_keywords = keywords
-            st.session_state.generation_done = True
-            status.update(label="✅ 生成完了！", state="complete", expanded=False)
-
-        except Exception as e:
-            status.update(label="❌ エラーが発生しました", state="error")
-            st.error(f"エラー詳細: {e}")
-
-# ── Results ────────────────────────────────────────────────────────────────────
-if st.session_state.generation_done and st.session_state.result_markdown:
     st.divider()
+
+    # ── Generate button ─────────────────────────────────────────────────────────
+    has_input = bool(keywords.strip() or user_title.strip())
+
+    generate_clicked = st.button(
+        "🚀 ブログを生成する",
+        type="primary",
+        disabled=not ollama_ok or not has_input,
+        use_container_width=True,
+    )
+
+    if generate_clicked and has_input:
+        st.session_state.generation_done = False
+        st.session_state.result_markdown = None
+        st.session_state.saved_path = None
+        st.session_state.editing_mode = False
+
+        with st.status("生成中...", expanded=True) as status:
+            try:
+                st.write("📋 アウトラインを生成中...")
+                outline = generate_outline(
+                    keywords, int(num_sections), text_model, language, user_title, user_sections
+                )
+                title: str = outline["title"]
+                sections_list: list[str] = outline["sections"]
+                st.write(f"✅ タイトル決定: **{title}**")
+
+                sections_data: list[dict] = []
+                for i, section_title in enumerate(sections_list):
+                    st.write(f"✏️ セクション [{i + 1}/{len(sections_list)}] 執筆中: {section_title}")
+                    content = generate_section(
+                        title, section_title, keywords,
+                        text_model, language, rich_format, section_length
+                    )
+                    img_prompt = None
+                    if use_images and i < len(user_section_gen_images) and user_section_gen_images[i]:
+                        custom = user_section_img_prompts[i] if i < len(user_section_img_prompts) else ""
+                        img_prompt = custom.strip() if custom.strip() else generate_image_prompt(section_title, content, text_model)
+                    sections_data.append(
+                        {"heading": section_title, "content": content, "image_prompt": img_prompt, "image_path": None}
+                    )
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    sections_with_images = [s for s in sections_data if s["image_prompt"]]
+                    if use_images and sections_with_images:
+                        if not openai_api_key:
+                            raise ValueError("OpenAI API キーが入力されていません。サイドバーで設定してください。")
+                        st.write("🎨 画像を生成中...")
+                        img_gen = DalleGenerator(openai_api_key, image_quality)
+                        img_count = 0
+                        for i, sec in enumerate(sections_data):
+                            if not sec["image_prompt"]:
+                                continue
+                            img_count += 1
+                            st.write(f"🖼️ 画像 [{img_count}/{len(sections_with_images)}] 生成中: {sec['heading']}")
+                            img_path = Path(tmpdir) / f"img_{i}.png"
+                            img_gen.generate(sec["image_prompt"], img_path)
+                            sec["image_path"] = img_path
+
+                    st.write("📄 Markdown を組み立て中...")
+                    result = assemble_markdown(title, sections_data, include_toc, language)
+
+                st.session_state.result_markdown = result
+                st.session_state.result_title = title
+                st.session_state.result_keywords = keywords
+                st.session_state.generation_done = True
+                st.session_state.ui_mode = "edit"
+                status.update(label="✅ 生成完了！", state="complete", expanded=False)
+                st.rerun()
+
+            except Exception as e:
+                status.update(label="❌ エラーが発生しました", state="error")
+                st.error(f"エラー詳細: {e}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EDIT MODE
+# ══════════════════════════════════════════════════════════════════════════════
+elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     raw_title = st.session_state.result_title or "blog_post"
     saved_keywords = st.session_state.result_keywords
     slug = raw_title.replace("/", "_").replace(" ", "_")
     md_str = st.session_state.result_markdown
 
-    st.subheader("💾 ダウンロード")
-    col_md, col_wp, col_sp_html, col_sp_csv = st.columns(4)
+    # ── Header ─────────────────────────────────────────────────────────────────
+    _title_col, _new_col = st.columns([4, 1])
+    with _title_col:
+        st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
+    with _new_col:
+        if st.button("✍️ 新規作成", use_container_width=True):
+            st.session_state.ui_mode = "create"
+            st.session_state.generation_done = False
+            st.session_state.result_markdown = None
+            st.session_state.result_title = None
+            st.session_state.result_keywords = ""
+            st.session_state.saved_path = None
+            st.session_state.editing_mode = False
+            st.rerun()
+
+    st.divider()
+
+    # ── Save to disk ───────────────────────────────────────────────────────────
+    _save_col, _status_col = st.columns([1, 3])
+    with _save_col:
+        if st.button("💾 記事を保存", use_container_width=True, type="secondary"):
+            if st.session_state.saved_path:
+                update_article(st.session_state.saved_path, md_str)
+                _save_msg = "上書き保存しました"
+            else:
+                _p = save_article(raw_title, md_str, saved_keywords)
+                st.session_state.saved_path = _p
+                _save_msg = "保存しました"
+            with _status_col:
+                st.success(_save_msg, icon="✅")
+    if st.session_state.saved_path:
+        st.caption(f"📁 {st.session_state.saved_path}")
+
+    # ── Download ───────────────────────────────────────────────────────────────
+    st.subheader("⬇️ ダウンロード")
+    col_md, col_wp, col_sp = st.columns(3)
 
     with col_md:
         st.download_button(
@@ -327,45 +525,66 @@ if st.session_state.generation_done and st.session_state.result_markdown:
             use_container_width=True,
             help="汎用 Markdown ファイル。Hugo や Notion などにも使えます。",
         )
-
     with col_wp:
-        wp_html = to_wordpress_html(raw_title, md_str)
         st.download_button(
-            "🔵 WordPress HTML",
-            data=wp_html,
-            file_name=f"{slug}_wordpress.html",
-            mime="text/html",
+            "🔵 WordPress ZIP",
+            data=_wordpress_zip(raw_title, md_str),
+            file_name=f"{slug}_wordpress.zip",
+            mime="application/zip",
             use_container_width=True,
-            help="WordPress のブロックエディター（コードエディター）またはクラシックエディター（テキストタブ）に貼り付けて使います。",
+            help="post.html + images/ フォルダを含む ZIP。画像をメディアライブラリにアップロードし、post.html の URL を差し替えてから貼り付けてください。",
+        )
+    with col_sp:
+        st.download_button(
+            "🟢 Shopify ZIP",
+            data=_shopify_zip(raw_title, md_str),
+            file_name=f"{slug}_shopify.zip",
+            mime="application/zip",
+            use_container_width=True,
+            help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
         )
 
-    with col_sp_html:
-        sp_html = to_shopify_html(raw_title, md_str)
-        st.download_button(
-            "🟢 Shopify HTML",
-            data=sp_html,
-            file_name=f"{slug}_shopify.html",
-            mime="text/html",
-            use_container_width=True,
-            help="Shopify 管理画面 > ブログ記事 > コンテンツ欄の「HTML を表示」に貼り付けて使います。",
-        )
-
-    with col_sp_csv:
-        sp_csv = to_shopify_csv(raw_title, md_str, tags=saved_keywords)
-        st.download_button(
-            "🟢 Shopify CSV",
-            data=sp_csv,
-            file_name=f"{slug}_shopify.csv",
-            mime="text/csv",
-            use_container_width=True,
-            help="Matrixify アプリを使って Shopify に一括インポートできます。複数記事をまとめて入稿したい場合に便利です。",
-        )
-
+    # ── Preview / Edit / Raw ───────────────────────────────────────────────────
     st.divider()
     tab_preview, tab_raw = st.tabs(["プレビュー", "Markdown ソース"])
 
     with tab_preview:
-        st.markdown(md_str)
+        if st.session_state.editing_mode:
+            edited_md = st.text_area(
+                "編集",
+                value=st.session_state.edit_display_md,
+                height=600,
+                label_visibility="collapsed",
+                key="edit_area",
+            )
+            if st.session_state.edit_image_map:
+                st.caption(
+                    "📷 " + "　".join(
+                        f"`{k}` = 画像{i+1}"
+                        for i, k in enumerate(st.session_state.edit_image_map)
+                    )
+                )
+            _save_col2, _cancel_col = st.columns(2)
+            with _save_col2:
+                if st.button("💾 変更を保存", type="primary", use_container_width=True, key="edit_save"):
+                    restored = _restore_images_after_edit(edited_md, st.session_state.edit_image_map)
+                    st.session_state.result_markdown = restored
+                    st.session_state.editing_mode = False
+                    if st.session_state.saved_path:
+                        update_article(st.session_state.saved_path, restored)
+                    st.rerun()
+            with _cancel_col:
+                if st.button("キャンセル", use_container_width=True, key="edit_cancel"):
+                    st.session_state.editing_mode = False
+                    st.rerun()
+        else:
+            if st.button("✏️ 編集", key="edit_btn"):
+                stripped, image_map = _strip_images_for_edit(md_str)
+                st.session_state.edit_display_md = stripped
+                st.session_state.edit_image_map = image_map
+                st.session_state.editing_mode = True
+                st.rerun()
+            st.markdown(md_str)
 
     with tab_raw:
         st.text_area(
@@ -374,3 +593,103 @@ if st.session_state.generation_done and st.session_state.result_markdown:
             height=400,
             label_visibility="collapsed",
         )
+
+    # ── Revision ───────────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("✏️ 記事を修正する")
+
+    _section_headings = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
+    _target_options = ["全体"] + [f"セクション {i+1}：{t}" for i, t in enumerate(_section_headings)]
+    _revision_target = st.selectbox("修正対象", _target_options, key="revision_target")
+    _section_index = None if _revision_target == "全体" else _target_options.index(_revision_target) - 1
+
+    revision_prompt = st.text_area(
+        "修正の指示",
+        placeholder="例：もっと具体的な事例を追加してください\n例：簡潔にまとめてください\n例：初心者向けにわかりやすく書き直してください",
+        height=100,
+        label_visibility="collapsed",
+    )
+    if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not ollama_ok):
+        with st.spinner("修正中..."):
+            try:
+                revised = revise_article(md_str, revision_prompt, text_model, language, _section_index)
+                st.session_state.result_markdown = revised
+                if st.session_state.saved_path:
+                    update_article(st.session_state.saved_path, revised)
+                st.rerun()
+            except Exception as e:
+                st.error(f"修正に失敗しました: {e}")
+
+    # ── Image regeneration ─────────────────────────────────────────────────────
+    if OPENAI_AVAILABLE:
+        st.divider()
+        st.subheader("🖼️ 画像を再生成する")
+
+        import os as _os
+        _regen_key = load_openai_key() or _os.environ.get("OPENAI_API_KEY", "")
+
+        if not _regen_key:
+            st.info("OpenAI API キーをサイドバーで設定すると画像を再生成できます。")
+        else:
+            _img_sections = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
+            if not _img_sections:
+                st.caption("セクションが見つかりません。")
+            else:
+                _has_image = {
+                    h: bool(re.search(
+                        rf'## {re.escape(h)}\n+!\[[^\]]*\]\(data:image/',
+                        md_str,
+                    ))
+                    for h in _img_sections
+                }
+
+                _img_target = st.selectbox(
+                    "対象セクション",
+                    _img_sections,
+                    format_func=lambda h: f"{'🖼️' if _has_image[h] else '➕'} {h}",
+                    key="img_regen_target",
+                )
+                st.caption("🖼️ = 既存の画像を差し替え　➕ = 新たに画像を追加")
+
+                _img_prompt_input = st.text_input(
+                    "画像プロンプト（任意・英語）",
+                    placeholder="空欄 → セクション内容から AI が自動生成",
+                    key="img_regen_prompt",
+                )
+                _img_quality = st.select_slider(
+                    "品質",
+                    options=["標準", "高品質"],
+                    value="標準",
+                    key="img_regen_quality",
+                    help="標準: $0.04/枚 / 高品質(HD): $0.08/枚",
+                )
+
+                if st.button("🔄 画像を再生成", key="img_regen_btn", type="secondary"):
+                    with st.spinner("画像を生成中..."):
+                        try:
+                            if _img_prompt_input.strip():
+                                _final_prompt = _img_prompt_input.strip()
+                            elif ollama_ok:
+                                _body = _extract_section_body(md_str, _img_target)
+                                _final_prompt = generate_image_prompt(_img_target, _body, text_model)
+                            else:
+                                st.error("Ollama が起動していないためプロンプトを自動生成できません。プロンプトを直接入力してください。")
+                                st.stop()
+
+                            _img_gen = DalleGenerator(_regen_key, _img_quality)
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as _tf:
+                                _tmp_path = Path(_tf.name)
+                            try:
+                                _img_gen.generate(_final_prompt, _tmp_path)
+                                from core.assembler import _embed_image
+                                _new_data_uri = _embed_image(_tmp_path)
+                            finally:
+                                _tmp_path.unlink(missing_ok=True)
+
+                            _new_md = _replace_section_image(md_str, _img_target, _new_data_uri)
+                            st.session_state.result_markdown = _new_md
+                            if st.session_state.saved_path:
+                                update_article(st.session_state.saved_path, _new_md)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"画像の再生成に失敗しました: {e}")

@@ -26,6 +26,7 @@ mkdir -p "$SRC_DIR"
 rsync -a \
     --exclude='.venv/' \
     --exclude='.python/' \
+    --exclude='.uv' \
     --exclude='__pycache__/' \
     --exclude='*.app' \
     --exclude='.DS_Store' \
@@ -33,6 +34,10 @@ rsync -a \
     --exclude='AppIcon.iconset' \
     --exclude='*.zip' \
     --exclude='launcher/' \
+    --exclude='.git/' \
+    --exclude='config.json' \
+    --exclude='articles/' \
+    --exclude='memory/' \
     . "$SRC_DIR/"
 
 # ── uv バイナリを両アーキテクチャ分ダウンロード ───────────────
@@ -91,6 +96,7 @@ rsync -a --checksum \
     --exclude='__pycache__/' \
     --exclude='.DS_Store' \
     --exclude='config.json' \
+    --exclude='articles/' \
     "${BUNDLE_RES}/app_source/." "$PROJECT_DIR/"
 # 古いバイトコードキャッシュを削除（古い .pyc が残ると修正が反映されない）
 find "$PROJECT_DIR" -name "*.pyc" -not -path "*/.venv/*" -delete 2>/dev/null || true
