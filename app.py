@@ -129,9 +129,12 @@ st.markdown(
     .main-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
     .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button {
+        justify-content: flex-start;
+    }
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button p {
         overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block;
-        font-size: 0.78rem; text-align: left;
+        font-size: 0.78rem;
     }
     </style>
     """,
