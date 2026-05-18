@@ -129,6 +129,10 @@ st.markdown(
     .main-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
     .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button p {
+        overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block;
+        font-size: 0.78rem; text-align: left;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -313,11 +317,10 @@ with st.sidebar:
         st.caption("保存された記事はまだありません。")
     else:
         for _art in _articles:
-            _title_label = _art["title"][:24] + "…" if len(_art["title"]) > 24 else _art["title"]
             _date_hint = _art["created"][:10] if _art["created"] else ""
             _c1, _c2 = st.columns([5, 1])
             with _c1:
-                if st.button(_title_label, key=f"load_{_art['filename']}", use_container_width=True,
+                if st.button(_art["title"], key=f"load_{_art['filename']}", use_container_width=True,
                              help=_date_hint or None):
                     _data = load_article(_art["path"])
                     st.session_state.result_markdown = _data["markdown"]
