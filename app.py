@@ -210,20 +210,17 @@ with st.sidebar:
 
     st.divider()
 
-    use_images = st.toggle("画像を生成する", value=False)
-
     image_quality = "標準"
     openai_api_key = ""
 
-    if use_images:
+    with st.expander("🎨 OpenAI 画像生成設定"):
         if not OPENAI_AVAILABLE:
             st.warning("openai パッケージが見つかりません。", icon="⚠️")
-            use_images = False
         else:
             import os
             _saved_key = load_openai_key() or os.environ.get("OPENAI_API_KEY", "")
             openai_api_key = st.text_input(
-                "OpenAI API キー",
+                "API キー",
                 value=_saved_key,
                 type="password",
                 placeholder="sk-...",
@@ -269,10 +266,6 @@ with st.sidebar:
                                 "OpenAI アカウントで画像生成が有効か確認してください。"
                             )
 
-    st.divider()
-    if use_images:
-        st.caption("💡 **料金目安**\n\n- 標準: $0.04/枚\n- 高品質(HD): $0.08/枚\n- 画像3枚の記事: $0.12〜$0.24")
-
     # ── WordPress sites ────────────────────────────────────────────────────────
     st.divider()
     with st.expander("🌐 WordPress 設定"):
@@ -317,12 +310,12 @@ with st.sidebar:
         st.caption("保存された記事はまだありません。")
     else:
         for _art in _articles:
-            st.markdown(f"**{_art['title']}**")
-            if _art["created"]:
-                st.caption(_art["created"][:10])
-            _c1, _c2 = st.columns([3, 1])
+            _title_label = _art["title"][:24] + "…" if len(_art["title"]) > 24 else _art["title"]
+            _date_hint = _art["created"][:10] if _art["created"] else ""
+            _c1, _c2 = st.columns([5, 1])
             with _c1:
-                if st.button("読み込む", key=f"load_{_art['filename']}", use_container_width=True):
+                if st.button(_title_label, key=f"load_{_art['filename']}", use_container_width=True,
+                             help=_date_hint or None):
                     _data = load_article(_art["path"])
                     st.session_state.result_markdown = _data["markdown"]
                     st.session_state.result_title = _data["title"]
@@ -334,12 +327,11 @@ with st.sidebar:
                     st.rerun()
             with _c2:
                 if st.button("🗑️", key=f"del_{_art['filename']}", use_container_width=True,
-                             help="この記事を削除"):
+                             help="削除"):
                     delete_article(_art["path"])
                     if st.session_state.saved_path == _art["path"]:
                         st.session_state.saved_path = None
                     st.rerun()
-            st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CREATE MODE
@@ -410,7 +402,7 @@ if st.session_state.ui_mode == "create":
             if _i > 0:
                 st.divider()
             st.markdown(f"**セクション {_i + 1}**")
-            if use_images:
+            if OPENAI_AVAILABLE:
                 _h_col, _img_col = st.columns([3, 1])
                 with _h_col:
                     user_sections.append(
@@ -423,7 +415,7 @@ if st.session_state.ui_mode == "create":
                     )
                 with _img_col:
                     st.write("")
-                    _gen = st.checkbox("画像を生成", value=True, key=f"section_gen_img_{_i}")
+                    _gen = st.checkbox("画像を生成", value=False, key=f"section_gen_img_{_i}")
             else:
                 user_sections.append(
                     st.text_input(
@@ -433,22 +425,21 @@ if st.session_state.ui_mode == "create":
                         label_visibility="visible",
                     )
                 )
-            if use_images:
-                user_section_gen_images.append(_gen)
-                if _gen:
-                    user_section_img_prompts.append(
-                        st.text_input(
-                            "画像プロンプト（任意・英語）",
-                            placeholder="空欄 → AI が自動生成",
-                            key=f"section_img_prompt_{_i}",
-                            label_visibility="visible",
-                        )
+                _gen = False
+            user_section_gen_images.append(_gen)
+            if _gen:
+                user_section_img_prompts.append(
+                    st.text_input(
+                        "画像プロンプト（任意・英語）",
+                        placeholder="空欄 → AI が自動生成",
+                        key=f"section_img_prompt_{_i}",
+                        label_visibility="visible",
                     )
-                else:
-                    user_section_img_prompts.append("")
+                )
             else:
-                user_section_gen_images.append(False)
                 user_section_img_prompts.append("")
+
+    use_images = any(user_section_gen_images)
 
     st.divider()
 
