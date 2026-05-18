@@ -795,10 +795,18 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 "ステータス", list(_status_map.keys()), key="wp_status_select"
             )]
 
+        _wp_use_blocks = st.radio(
+            "エディタ形式",
+            ["クラシック（HTML）", "ブロック（Gutenberg）"],
+            horizontal=True,
+            key="wp_editor_format",
+        ) == "ブロック（Gutenberg）"
+
         if st.button("📤 WordPress に投稿する", type="primary", key="wp_publish_btn", use_container_width=True):
             with st.spinner("投稿中... 画像をアップロードしています"):
                 try:
-                    _result = publish_article(_wp_site, raw_title, md_str, _wp_rest_base, _wp_status)
+                    _result = publish_article(_wp_site, raw_title, md_str, _wp_rest_base, _wp_status,
+                                              use_blocks=_wp_use_blocks)
                     _label = {v: k for k, v in _status_map.items()}.get(_result["status"], _result["status"])
                     st.success(f"投稿しました！（{_label}）", icon="✅")
                     if _result["link"]:

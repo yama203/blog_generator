@@ -132,13 +132,15 @@ def publish_article(
     markdown_str: str,
     rest_base: str,
     status: str,
+    use_blocks: bool = False,
 ) -> dict:
     """
     WordPress に記事を投稿する。
     base64 画像はメディアライブラリにアップロードして URL に差し替える。
+    use_blocks=True のとき Gutenberg ブロックマークアップで投稿する。
     {"id": int, "link": str, "status": str} を返す。
     """
-    from core.exporter import _md_to_html
+    from core.exporter import _md_to_html, _md_to_gutenberg
 
     base_url = _base_url(site)
     auth = _auth(site)
@@ -166,7 +168,7 @@ def publish_article(
 
     # H1 タイトルを除去（WordPress の title フィールドと重複するため）
     md_body = re.sub(r'^# .+\n?', '', processed_md, count=1).strip()
-    html = _md_to_html(md_body)
+    html = _md_to_gutenberg(md_body) if use_blocks else _md_to_html(md_body)
 
     r = requests.post(
         f"{base_url}/wp-json/wp/v2/{rest_base}",
