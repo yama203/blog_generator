@@ -154,6 +154,7 @@ for key, default in [
     ("edit_image_map", {}),
     ("writing_style", list(WRITING_STYLES.keys())[0]),
     ("manual_edit_saved", False),
+    ("manual_edit_open", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -659,7 +660,8 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             except Exception as e:
                                 st.error(f"画像の再生成に失敗しました: {e}")
 
-    with st.expander("✏️ 手動で編集する"):
+    with st.expander("✏️ 手動で編集する", expanded=st.session_state.manual_edit_open):
+        st.session_state.manual_edit_open = True
         _stripped, _image_map = _strip_images_for_edit(md_str)
         _edited_md = st.text_area(
             "手動編集",
@@ -681,6 +683,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             if st.session_state.saved_path:
                 update_article(st.session_state.saved_path, _restored)
             st.session_state.manual_edit_saved = True
+            st.session_state.manual_edit_open = False
             st.rerun()
         if st.session_state.manual_edit_saved:
             st.session_state.manual_edit_saved = False
