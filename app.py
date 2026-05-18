@@ -595,107 +595,103 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
         )
 
     # ── Revision ───────────────────────────────────────────────────────────────
-    st.divider()
-    st.subheader("✏️ 記事を修正する")
+    with st.expander("✏️ AIで記事を修正する"):
+        _section_headings = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
+        _target_options = ["全体"] + [f"セクション {i+1}：{t}" for i, t in enumerate(_section_headings)]
+        _revision_target = st.selectbox("修正対象", _target_options, key="revision_target")
+        _section_index = None if _revision_target == "全体" else _target_options.index(_revision_target) - 1
 
-    _section_headings = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
-    _target_options = ["全体"] + [f"セクション {i+1}：{t}" for i, t in enumerate(_section_headings)]
-    _revision_target = st.selectbox("修正対象", _target_options, key="revision_target")
-    _section_index = None if _revision_target == "全体" else _target_options.index(_revision_target) - 1
-
-    revision_prompt = st.text_area(
-        "修正の指示",
-        placeholder="例：もっと具体的な事例を追加してください\n例：簡潔にまとめてください\n例：初心者向けにわかりやすく書き直してください",
-        height=100,
-        label_visibility="collapsed",
-    )
-    if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not ollama_ok):
-        with st.spinner("修正中..."):
-            try:
-                revised = revise_article(
-                    md_str, revision_prompt, text_model, language,
-                    _section_index, st.session_state.writing_style,
-                )
-                st.session_state.result_markdown = revised
-                if st.session_state.saved_path:
-                    update_article(st.session_state.saved_path, revised)
-                st.rerun()
-            except Exception as e:
-                st.error(f"修正に失敗しました: {e}")
+        revision_prompt = st.text_area(
+            "修正の指示",
+            placeholder="例：もっと具体的な事例を追加してください\n例：簡潔にまとめてください\n例：初心者向けにわかりやすく書き直してください",
+            height=100,
+            label_visibility="collapsed",
+        )
+        if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not ollama_ok):
+            with st.spinner("修正中..."):
+                try:
+                    revised = revise_article(
+                        md_str, revision_prompt, text_model, language,
+                        _section_index, st.session_state.writing_style,
+                    )
+                    st.session_state.result_markdown = revised
+                    if st.session_state.saved_path:
+                        update_article(st.session_state.saved_path, revised)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"修正に失敗しました: {e}")
 
     # ── Image regeneration ─────────────────────────────────────────────────────
     if OPENAI_AVAILABLE:
-        st.divider()
-        st.subheader("🖼️ 画像を再生成する")
+        with st.expander("🖼️ 画像を再生成する"):
+            import os as _os
+            _regen_key = load_openai_key() or _os.environ.get("OPENAI_API_KEY", "")
 
-        import os as _os
-        _regen_key = load_openai_key() or _os.environ.get("OPENAI_API_KEY", "")
-
-        if not _regen_key:
-            st.info("OpenAI API キーをサイドバーで設定すると画像を再生成できます。")
-        else:
-            _img_sections = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
-            if not _img_sections:
-                st.caption("セクションが見つかりません。")
+            if not _regen_key:
+                st.info("OpenAI API キーをサイドバーで設定すると画像を再生成できます。")
             else:
-                _has_image = {
-                    h: bool(re.search(
-                        rf'## {re.escape(h)}\n+!\[[^\]]*\]\(data:image/',
-                        md_str,
-                    ))
-                    for h in _img_sections
-                }
+                _img_sections = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
+                if not _img_sections:
+                    st.caption("セクションが見つかりません。")
+                else:
+                    _has_image = {
+                        h: bool(re.search(
+                            rf'## {re.escape(h)}\n+!\[[^\]]*\]\(data:image/',
+                            md_str,
+                        ))
+                        for h in _img_sections
+                    }
 
-                _img_target = st.selectbox(
-                    "対象セクション",
-                    _img_sections,
-                    format_func=lambda h: f"{'🖼️' if _has_image[h] else '➕'} {h}",
-                    key="img_regen_target",
-                )
-                st.caption("🖼️ = 既存の画像を差し替え　➕ = 新たに画像を追加")
+                    _img_target = st.selectbox(
+                        "対象セクション",
+                        _img_sections,
+                        format_func=lambda h: f"{'🖼️' if _has_image[h] else '➕'} {h}",
+                        key="img_regen_target",
+                    )
+                    st.caption("🖼️ = 既存の画像を差し替え　➕ = 新たに画像を追加")
 
-                _img_prompt_input = st.text_input(
-                    "画像プロンプト（任意・英語）",
-                    placeholder="空欄 → セクション内容から AI が自動生成",
-                    key="img_regen_prompt",
-                )
-                _img_quality = st.select_slider(
-                    "品質",
-                    options=["標準", "高品質"],
-                    value="標準",
-                    key="img_regen_quality",
-                    help="標準: $0.04/枚 / 高品質(HD): $0.08/枚",
-                )
+                    _img_prompt_input = st.text_input(
+                        "画像プロンプト（任意・英語）",
+                        placeholder="空欄 → セクション内容から AI が自動生成",
+                        key="img_regen_prompt",
+                    )
+                    _img_quality = st.select_slider(
+                        "品質",
+                        options=["標準", "高品質"],
+                        value="標準",
+                        key="img_regen_quality",
+                        help="標準: $0.04/枚 / 高品質(HD): $0.08/枚",
+                    )
 
-                if st.button("🔄 画像を再生成", key="img_regen_btn", type="secondary"):
-                    with st.spinner("画像を生成中..."):
-                        try:
-                            if _img_prompt_input.strip():
-                                _final_prompt = _img_prompt_input.strip()
-                            elif ollama_ok:
-                                _body = _extract_section_body(md_str, _img_target)
-                                _final_prompt = generate_image_prompt(_img_target, _body, text_model)
-                            else:
-                                st.error("Ollama が起動していないためプロンプトを自動生成できません。プロンプトを直接入力してください。")
-                                st.stop()
-
-                            _img_gen = DalleGenerator(_regen_key, _img_quality)
-                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as _tf:
-                                _tmp_path = Path(_tf.name)
+                    if st.button("🔄 画像を再生成", key="img_regen_btn", type="secondary"):
+                        with st.spinner("画像を生成中..."):
                             try:
-                                _img_gen.generate(_final_prompt, _tmp_path)
-                                from core.assembler import _embed_image
-                                _new_data_uri = _embed_image(_tmp_path)
-                            finally:
-                                _tmp_path.unlink(missing_ok=True)
+                                if _img_prompt_input.strip():
+                                    _final_prompt = _img_prompt_input.strip()
+                                elif ollama_ok:
+                                    _body = _extract_section_body(md_str, _img_target)
+                                    _final_prompt = generate_image_prompt(_img_target, _body, text_model)
+                                else:
+                                    st.error("Ollama が起動していないためプロンプトを自動生成できません。プロンプトを直接入力してください。")
+                                    st.stop()
 
-                            _new_md = _replace_section_image(md_str, _img_target, _new_data_uri)
-                            st.session_state.result_markdown = _new_md
-                            if st.session_state.saved_path:
-                                update_article(st.session_state.saved_path, _new_md)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"画像の再生成に失敗しました: {e}")
+                                _img_gen = DalleGenerator(_regen_key, _img_quality)
+                                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as _tf:
+                                    _tmp_path = Path(_tf.name)
+                                try:
+                                    _img_gen.generate(_final_prompt, _tmp_path)
+                                    from core.assembler import _embed_image
+                                    _new_data_uri = _embed_image(_tmp_path)
+                                finally:
+                                    _tmp_path.unlink(missing_ok=True)
+
+                                _new_md = _replace_section_image(md_str, _img_target, _new_data_uri)
+                                st.session_state.result_markdown = _new_md
+                                if st.session_state.saved_path:
+                                    update_article(st.session_state.saved_path, _new_md)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"画像の再生成に失敗しました: {e}")
 
     # ── Save to disk ───────────────────────────────────────────────────────────
     st.divider()
