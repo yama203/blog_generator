@@ -6,8 +6,12 @@ __pycache__/
 .python/
 .uv
 
-# App bundle (大きいので除外)
+# App bundle・配布用 zip (大きいので除外)
 *.app/
+*.zip
+
+# 生成済み記事
+articles/
 
 # 設定・秘密情報
 config.json
