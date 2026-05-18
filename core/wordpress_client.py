@@ -14,29 +14,79 @@ def _base_url(site: dict) -> str:
 
 
 def _auth(site: dict) -> tuple[str, str]:
-    return (site["username"], site["app_password"])
+    # Application Passwords are displayed with spaces ("Xxxx Xxxx ...") but
+    # WordPress authenticates against the spaceless form.
+    return (site["username"], site["app_password"].replace(" ", ""))
+
+
+_HTACCESS_HINT = (
+    "【レンタルサーバーの場合の対処法】\n"
+    "FastCGI/PHP-FPM 環境では Authorization ヘッダーが PHP に届かないため\n"
+    "アプリケーションパスワードが機能しません。\n"
+    "WordPress の .htaccess（wp-config.php と同じディレクトリ）に\n"
+    "以下を追記してください:\n\n"
+    "  RewriteEngine On\n"
+    "  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]\n\n"
+    "さくらのレンタルサーバー / エックスサーバー / ロリポップ 等で有効です。"
+)
+
+
+def _body_hint(r: requests.Response) -> str:
+    """レスポンスボディ先頭を診断用に返す。"""
+    try:
+        text = r.text.strip()
+        if not text:
+            return ""
+        # JSON なら message フィールドだけ取り出す
+        try:
+            j = r.json()
+            msg = j.get("message") or j.get("error") or ""
+            if msg:
+                return f"WordPress メッセージ: {msg}"
+        except Exception:
+            pass
+        return f"サーバーレスポンス（先頭）: {text[:200]}"
+    except Exception:
+        return ""
 
 
 def test_connection(site: dict) -> tuple[bool, str]:
     """接続・認証を確認。(ok, メッセージ) を返す。"""
+    url = f"{_base_url(site)}/wp-json/wp/v2/users/me"
     try:
-        r = requests.get(
-            f"{_base_url(site)}/wp-json/wp/v2/users/me",
-            auth=_auth(site),
-            timeout=_TIMEOUT,
-        )
+        r = requests.get(url, auth=_auth(site), timeout=_TIMEOUT)
         if r.status_code == 200:
             name = r.json().get("name", "")
             return True, f"接続OK（{name}）"
+
+        hint = _body_hint(r)
+
         if r.status_code == 401:
-            return False, "認証エラー: ユーザー名またはアプリケーションパスワードを確認してください"
+            return False, (
+                "HTTP 401 認証エラー\n"
+                "ユーザー名またはアプリケーションパスワードが正しくありません。\n"
+                "パスワードはスペースなしで入力しているか確認してください。\n\n"
+                f"{_HTACCESS_HINT}\n\n{hint}"
+            )
+        if r.status_code == 403:
+            return False, (
+                "HTTP 403 アクセス拒否\n"
+                "セキュリティプラグイン（Wordfence 等）または\n"
+                "サーバーが REST API へのアクセスをブロックしています。\n\n"
+                f"{_HTACCESS_HINT}\n\n{hint}"
+            )
         if r.status_code == 404:
-            return False, "REST API が見つかりません。URL またはパーマリンク設定を確認してください"
-        return False, f"エラー: HTTP {r.status_code}"
+            return False, (
+                "HTTP 404: REST API が見つかりません\n"
+                "URL またはパーマリンク設定（投稿名など）を確認してください。\n\n"
+                f"アクセス先: {url}\n{hint}"
+            )
+        return False, f"HTTP {r.status_code}\nアクセス先: {url}\n{hint}"
+
     except requests.exceptions.SSLError:
         return False, "SSL エラー: HTTPS の証明書を確認してください"
     except requests.exceptions.ConnectionError:
-        return False, "接続できません: URL を確認してください"
+        return False, f"接続できません\nアクセス先: {url}\nURL を確認してください"
     except Exception as e:
         return False, f"エラー: {e}"
 

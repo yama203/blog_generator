@@ -290,9 +290,9 @@ with st.sidebar:
         _wp_user = st.text_input("ユーザー名", key="wp_add_user")
         _wp_pw   = st.text_input(
             "アプリケーションパスワード", type="password",
-            placeholder="xxxx xxxx xxxx xxxx",
+            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx",
             key="wp_add_pw",
-            help="WordPress 管理画面 > ユーザー > プロフィール > アプリケーションパスワード で発行",
+            help="WordPress 管理画面 > ユーザー > プロフィール > アプリケーションパスワード で発行。スペース込みのままペーストしてOKです。",
         )
         if st.button("追加", key="wp_add_btn", use_container_width=True):
             if _wp_name and _wp_url and _wp_user and _wp_pw:
