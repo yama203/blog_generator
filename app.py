@@ -382,7 +382,9 @@ if st.session_state.ui_mode == "create":
             min_value=2, max_value=8, value=3, step=1,
             help="記事の見出し（H2）の数です。目安: 短め=2〜3、標準=4〜5、詳細=6〜8",
         )
-        language = st.selectbox("記事の言語", ["日本語", "English"])
+        language = st.selectbox("記事の言語", ["日本語", "English"],
+                                index=["日本語", "English"].index(st.session_state.get("language", "日本語")))
+        st.session_state["language"] = language
         writing_style = st.selectbox(
             "文体",
             list(WRITING_STYLES.keys()),
@@ -542,6 +544,8 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     saved_keywords = st.session_state.result_keywords
     slug = raw_title.replace("/", "_").replace(" ", "_")
     md_str = st.session_state.result_markdown
+    language = st.session_state.get("language", "日本語")
+    writing_style = st.session_state.get("writing_style", list(WRITING_STYLES.keys())[0])
 
     # ── Header ─────────────────────────────────────────────────────────────────
     st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
