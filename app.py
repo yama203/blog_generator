@@ -290,7 +290,7 @@ with st.sidebar:
     @st.dialog("🌐 WordPress 設定", width="large")
     def _wp_settings_dialog() -> None:
         _sites = list_wordpress_sites()
-        _editing = st.session_state.get("wp_editing")  # site name being edited, or None
+        _editing = st.session_state.get("wp_editing")
 
         if _sites:
             st.caption("登録済みサイト")
@@ -302,43 +302,38 @@ with st.sidebar:
                     if st.button("✏️", key=f"wp_edit_{_ws['name']}", help="編集",
                                  use_container_width=True):
                         st.session_state.wp_editing = _ws["name"]
-                        st.rerun()
                 with _wc3:
                     if st.button("🗑️", key=f"wp_del_{_ws['name']}", help="削除",
                                  use_container_width=True):
                         delete_wordpress_site(_ws["name"])
                         if _editing == _ws["name"]:
                             st.session_state.pop("wp_editing", None)
-                        st.rerun()
 
-            if _editing:
-                _site_data = next((s for s in _sites if s["name"] == _editing), None)
-                if _site_data:
-                    st.divider()
-                    st.caption(f"「{_editing}」を編集")
-                    _e_url  = st.text_input("URL", value=_site_data["url"], key="wp_e_url")
-                    _e_user = st.text_input("ユーザー名", value=_site_data["username"], key="wp_e_user")
-                    _e_pw   = st.text_input(
-                        "アプリケーションパスワード", type="password",
-                        value=_site_data["app_password"], key="wp_e_pw",
-                        help="WordPress 管理画面 > ユーザー > プロフィール > アプリケーションパスワード で発行。",
-                    )
-                    _es1, _es2 = st.columns(2)
-                    with _es1:
-                        if st.button("💾 保存", key="wp_e_save", use_container_width=True, type="primary"):
-                            if _e_url and _e_user and _e_pw:
-                                save_wordpress_site({
-                                    "name": _editing, "url": _e_url,
-                                    "username": _e_user, "app_password": _e_pw,
-                                })
-                                st.session_state.pop("wp_editing", None)
-                                st.rerun()
-                            else:
-                                st.warning("すべての項目を入力してください")
-                    with _es2:
-                        if st.button("キャンセル", key="wp_e_cancel", use_container_width=True):
+            if _editing and any(s["name"] == _editing for s in _sites):
+                _site_data = next(s for s in _sites if s["name"] == _editing)
+                st.divider()
+                st.caption(f"「{_editing}」を編集")
+                _e_url  = st.text_input("URL", value=_site_data["url"], key="wp_e_url")
+                _e_user = st.text_input("ユーザー名", value=_site_data["username"], key="wp_e_user")
+                _e_pw   = st.text_input(
+                    "アプリケーションパスワード", type="password",
+                    value=_site_data["app_password"], key="wp_e_pw",
+                    help="WordPress 管理画面 > ユーザー > プロフィール > アプリケーションパスワード で発行。",
+                )
+                _es1, _es2 = st.columns(2)
+                with _es1:
+                    if st.button("💾 保存", key="wp_e_save", use_container_width=True, type="primary"):
+                        if _e_url and _e_user and _e_pw:
+                            save_wordpress_site({
+                                "name": _editing, "url": _e_url,
+                                "username": _e_user, "app_password": _e_pw,
+                            })
                             st.session_state.pop("wp_editing", None)
-                            st.rerun()
+                        else:
+                            st.warning("すべての項目を入力してください")
+                with _es2:
+                    if st.button("キャンセル", key="wp_e_cancel", use_container_width=True):
+                        st.session_state.pop("wp_editing", None)
 
         st.divider()
         st.caption("サイトを追加")
@@ -359,12 +354,14 @@ with st.sidebar:
                     "username": _wp_user, "app_password": _wp_pw,
                 })
                 st.session_state.wp_add_gen = _add_gen + 1
-                st.rerun()
             else:
                 st.warning("すべての項目を入力してください")
 
     if st.button("🌐 WordPress 設定", use_container_width=True, key="wp_settings_btn"):
         st.session_state.pop("wp_editing", None)
+        st.session_state.wp_dialog_open = True
+
+    if st.session_state.get("wp_dialog_open"):
         _wp_settings_dialog()
 
     # ── Saved articles ─────────────────────────────────────────────────────────
