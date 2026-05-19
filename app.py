@@ -302,12 +302,14 @@ with st.sidebar:
                     if st.button("✏️", key=f"wp_edit_{_ws['name']}", help="編集",
                                  use_container_width=True):
                         st.session_state.wp_editing = _ws["name"]
+                        st.rerun()
                 with _wc3:
                     if st.button("🗑️", key=f"wp_del_{_ws['name']}", help="削除",
                                  use_container_width=True):
                         delete_wordpress_site(_ws["name"])
                         if _editing == _ws["name"]:
                             st.session_state.pop("wp_editing", None)
+                        st.rerun()
 
             if _editing and any(s["name"] == _editing for s in _sites):
                 _site_data = next(s for s in _sites if s["name"] == _editing)
@@ -329,11 +331,13 @@ with st.sidebar:
                                 "username": _e_user, "app_password": _e_pw,
                             })
                             st.session_state.pop("wp_editing", None)
+                            st.rerun()
                         else:
                             st.warning("すべての項目を入力してください")
                 with _es2:
                     if st.button("キャンセル", key="wp_e_cancel", use_container_width=True):
                         st.session_state.pop("wp_editing", None)
+                        st.rerun()
 
         st.divider()
         st.caption("サイトを追加")
@@ -354,6 +358,7 @@ with st.sidebar:
                     "username": _wp_user, "app_password": _wp_pw,
                 })
                 st.session_state.wp_add_gen = _add_gen + 1
+                st.rerun()
             else:
                 st.warning("すべての項目を入力してください")
 
