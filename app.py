@@ -552,6 +552,8 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     # ── Header ─────────────────────────────────────────────────────────────────
     st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
+    if st.session_state.saved_path:
+        st.caption(f"📁 {st.session_state.saved_path}")
 
     st.divider()
 
@@ -584,6 +586,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     )
 
     # ── Edit tools ─────────────────────────────────────────────────────────────
+    st.divider()
     st.markdown("**編集ツール**")
     with st.expander("✏️ AIで記事を修正する"):
         _section_headings = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
@@ -822,6 +825,3 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.markdown(f"[投稿を確認する →]({_result['link']})")
                     except Exception as _e:
                         st.error(f"投稿に失敗しました: {_e}")
-
-    if st.session_state.saved_path:
-        st.caption(f"📁 {st.session_state.saved_path}")
