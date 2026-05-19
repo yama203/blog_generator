@@ -4,8 +4,7 @@
 A local AI application that automatically generates blog posts, including structured text and AI-generated images, running entirely on a high-spec Mac environment.
 
 ## Hardware Environment
-- **Machine:** Mac Studio / MacBook Pro (M1 Max)
-- **Memory:** 64GB Unified Memory
+- **Machine:** Apple Silicon Mac
 - **OS:** macOS
 
 ## Core Tech Stack (Proposed)
@@ -27,5 +26,5 @@ A local AI application that automatically generates blog posts, including struct
 
 ## Implementation Details for Claude Code
 - Use `ollama-python` or direct HTTP requests to interact with Ollama.
-- For local image generation, utilize `diffusers` with `mps` (Metal Performance Shaders) backend to leverage M1 Max GPU.
-- Ensure efficient memory management to load both Text and Image models within the 64GB shared memory.
+- For local image generation, utilize `diffusers` with `mps` (Metal Performance Shaders) backend to leverage Apple Silicon GPU.
+- Ensure efficient memory management to load both Text and Image models within the available unified memory.
