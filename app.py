@@ -508,7 +508,6 @@ if st.session_state.ui_mode == "create":
         )
         rich_elements: set[str] = set()
         if rich_format:
-            from core.text_generator import RICH_ELEMENTS as _RE
             _labels = {
                 "bold":       "太字",
                 "bullet":     "箇条書き",
@@ -674,9 +673,6 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     # ── Header ─────────────────────────────────────────────────────────────────
     st.markdown(f'<p class="article-title">📄 {raw_title}</p>', unsafe_allow_html=True)
-    if st.session_state.saved_path:
-        st.caption(f"📁 {st.session_state.saved_path}")
-
     st.divider()
 
     # ── Preview / Edit / Raw ───────────────────────────────────────────────────
