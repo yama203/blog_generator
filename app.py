@@ -470,12 +470,18 @@ with st.sidebar:
                          key="do_update", use_container_width=True, type="primary"):
                 with st.spinner("ダウンロード中..."):
                     try:
-                        download_and_apply(_rel["zip_url"], _rel["version"])
+                        reqs_changed = download_and_apply(_rel["zip_url"], _rel["version"])
                         st.session_state.update_checked = False
-                        st.success(
-                            "✅ アップデート完了！\n\n"
-                            "アプリを再起動してください（.app をもう一度クリック）。",
-                        )
+                        if reqs_changed:
+                            st.success(
+                                "✅ アップデート完了！（新しいパッケージもインストールしました）\n\n"
+                                "アプリを再起動してください（.app をもう一度クリック）。",
+                            )
+                        else:
+                            st.success(
+                                "✅ アップデート完了！\n\n"
+                                "アプリを再起動してください（.app をもう一度クリック）。",
+                            )
                     except Exception as _e:
                         st.error(f"アップデートに失敗しました: {_e}")
         else:
