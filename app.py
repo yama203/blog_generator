@@ -189,21 +189,22 @@ with st.sidebar:
         if ollama_ok:
             available_models = list_ollama_models()
             if available_models:
-                text_model = st.selectbox("テキストモデル", available_models, label_visibility="collapsed")
+                text_model = st.selectbox("使用するモデル", available_models, label_visibility="visible")
             else:
-                st.warning("モデルがありません。「モデルを追加」からダウンロードしてください。", icon="⚠️")
+                st.warning("モデルがありません。", icon="⚠️")
         else:
             st.caption("Ollama が起動していません。")
 
-    with st.expander("📥 モデルを追加"):
+        st.caption("モデルを追加")
         already = set(list_ollama_models()) if ollama_ok else set()
         model_choice = st.selectbox(
-            "モデルを選択",
+            "追加するモデル",
             list(RECOMMENDED_MODELS.keys()),
             format_func=lambda m: (
                 f"{'✅ ' if m in already else ''}{m}  —  {RECOMMENDED_MODELS[m]}"
             ),
             key="pull_model_select",
+            label_visibility="collapsed",
         )
         if not ollama_ok:
             st.info("Ollama が起動していないとダウンロードできません。")
