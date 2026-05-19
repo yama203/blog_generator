@@ -409,7 +409,7 @@ if st.session_state.ui_mode == "create":
         additional_instructions = st.text_area(
             "追加指示（任意）",
             placeholder="例：専門用語は避け、中学生でも理解できるように書いてください\n例：各セクションに具体的な数値や事例を必ず含めてください\n例：読者が行動に移せるよう、実践的なアドバイスを重視してください",
-            height=90,
+            height=130,
             help="記事全体に対してAIへの追加指示を入力できます。文体・難易度・構成の方針など自由に指定してください。",
         )
 
