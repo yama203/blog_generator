@@ -131,10 +131,12 @@ st.markdown(
     .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
     div[data-testid="toastContainer"] { top: auto !important; bottom: 1rem; }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button > div {
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button > div,
+    div[role="dialog"] div[data-testid="stHorizontalBlock"] > div:first-child button > div {
         justify-content: flex-start !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button p {
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button p,
+    div[role="dialog"] div[data-testid="stHorizontalBlock"] > div:first-child button p {
         overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block;
         font-size: 0.78rem; text-align: left !important;
     }
@@ -345,7 +347,7 @@ with st.sidebar:
         _date_str = art["created"][:10] if art["created"] else ""
         if _date_str:
             st.markdown(
-                f'<p style="font-size:0.72rem;color:#888;margin:0.4rem 0 -0.3rem 0.25rem">{_date_str}</p>',
+                f'<p style="font-size:0.72rem;color:#888;margin:0.1rem 0 -0.2rem 0.25rem">{_date_str}</p>',
                 unsafe_allow_html=True,
             )
         _c1, _c2 = st.columns([5, 1])
