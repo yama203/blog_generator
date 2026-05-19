@@ -132,11 +132,11 @@ st.markdown(
     div[data-testid="stStatusWidget"] { display: none; }
     div[data-testid="toastContainer"] { top: auto !important; bottom: 1rem; }
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button > div {
-        justify-content: flex-start; text-align: left;
+        justify-content: flex-start !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div:first-child button p {
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button p {
         overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block;
-        font-size: 0.78rem;
+        font-size: 0.78rem; text-align: left !important;
     }
     </style>
     """,
@@ -343,17 +343,17 @@ with st.sidebar:
 
     def _render_article_row(art: dict, key_suffix: str = "") -> None:
         _date_str = art["created"][:10] if art["created"] else ""
+        if _date_str:
+            st.markdown(
+                f'<p style="font-size:0.72rem;color:#888;margin:0.4rem 0 -0.3rem 0.25rem">{_date_str}</p>',
+                unsafe_allow_html=True,
+            )
         _c1, _c2 = st.columns([5, 1])
         with _c1:
             if st.button(art["title"], key=f"load_{art['filename']}{key_suffix}",
                          use_container_width=True):
                 _load_article_into_session(art)
                 st.rerun()
-            if _date_str:
-                st.markdown(
-                    f'<p style="font-size:0.72rem;color:#888;margin:-0.5rem 0 0.4rem 0.25rem">{_date_str}</p>',
-                    unsafe_allow_html=True,
-                )
         with _c2:
             if st.button("🗑️", key=f"del_{art['filename']}{key_suffix}",
                          use_container_width=True, help="削除"):
