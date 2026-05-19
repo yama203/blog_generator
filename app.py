@@ -648,12 +648,12 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                         placeholder="空欄 → セクション内容から AI が自動生成",
                         key="img_regen_prompt",
                     )
-                    _img_quality = st.select_slider(
+                    _img_quality = st.radio(
                         "品質",
                         options=["標準", "高品質"],
-                        value="標準",
+                        horizontal=True,
                         key="img_regen_quality",
-                        help="標準: $0.04/枚 / 高品質(HD): $0.08/枚",
+                        captions=["$0.04/枚", "$0.08/枚"],
                     )
 
                     if st.button("🔄 画像を再生成", key="img_regen_btn", type="secondary"):
