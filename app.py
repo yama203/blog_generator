@@ -449,8 +449,23 @@ if st.session_state.ui_mode == "create":
         rich_format = st.toggle(
             "リッチフォーマット",
             value=True,
-            help="ON: 太字・箇条書き・引用ブロックを使って読みやすく整形 / OFF: シンプルな段落のみ",
+            help="ON: Markdown 書式を使って読みやすく整形 / OFF: シンプルな段落のみ",
         )
+        rich_elements: set[str] = set()
+        if rich_format:
+            from core.text_generator import RICH_ELEMENTS as _RE
+            _labels = {
+                "bold":       "太字",
+                "bullet":     "箇条書き",
+                "numbered":   "番号リスト",
+                "blockquote": "引用ブロック",
+                "code":       "コードブロック",
+            }
+            _cols = st.columns(2)
+            for _i, (_key, _label) in enumerate(_labels.items()):
+                with _cols[_i % 2]:
+                    if st.checkbox(_label, value=_key != "code", key=f"rf_{_key}"):
+                        rich_elements.add(_key)
         include_toc = st.toggle(
             "目次を生成する",
             value=False,
@@ -542,6 +557,7 @@ if st.session_state.ui_mode == "create":
                         title, section_title, keywords,
                         text_model, language, rich_format, section_length, writing_style,
                         additional_instructions=additional_instructions,
+                        rich_elements=rich_elements,
                     )
                     img_prompt = None
                     if use_images and i < len(user_section_gen_images) and user_section_gen_images[i]:

@@ -141,6 +141,15 @@ WRITING_STYLES: dict[str, str] = {
 }
 
 
+RICH_ELEMENTS: dict[str, str] = {
+    "bold":       "Use **bold** to highlight key terms and important concepts",
+    "bullet":     "Use bullet lists (- item) for enumerations and feature lists",
+    "numbered":   "Use numbered lists (1. item) for steps and ordered content",
+    "blockquote": "Use > blockquotes for key takeaways or notable quotes",
+    "code":       "Use `inline code` or ```code blocks``` for technical terms and snippets",
+}
+
+
 def generate_section(
     title: str,
     section_title: str,
@@ -151,19 +160,26 @@ def generate_section(
     section_length: str = "標準（約600字）",
     writing_style: str = "丁寧（です・ます調）",
     additional_instructions: str = "",
+    rich_elements: set[str] | None = None,
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
     word_range = SECTION_LENGTHS.get(section_length, "300-500 words")
     style_instr = WRITING_STYLES.get(writing_style, list(WRITING_STYLES.values())[0])
-    format_instruction = (
-        """Format using Markdown to improve readability:
-- Use **bold** to highlight key terms and important concepts
-- Use bullet lists (- item) or numbered lists for enumerations and steps
-- Use > blockquotes for key takeaways or notable quotes
-- Keep paragraphs short (2-4 sentences each)"""
-        if rich_format
-        else "Write in plain paragraphs only. Do not use any Markdown formatting (no bold, no lists, no blockquotes)."
-    )
+
+    if not rich_format or not rich_elements:
+        format_instruction = "Write in plain paragraphs only. Do not use any Markdown formatting (no bold, no lists, no blockquotes)."
+    else:
+        rules = "\n".join(f"- {RICH_ELEMENTS[k]}" for k in RICH_ELEMENTS if k in rich_elements)
+        forbidden = [RICH_ELEMENTS[k] for k in RICH_ELEMENTS if k not in rich_elements]
+        forbid_str = (" Do NOT use: " + ", ".join(
+            k.replace("bold", "bold/**")
+             .replace("bullet", "bullet lists")
+             .replace("numbered", "numbered lists")
+             .replace("blockquote", "blockquotes")
+             .replace("code", "code blocks")
+            for k in RICH_ELEMENTS if k not in rich_elements
+        ) + ".") if forbidden else ""
+        format_instruction = f"Format using Markdown to improve readability:\n{rules}\n- Keep paragraphs short (2-4 sentences each).{forbid_str}"
     extra = f"\nAdditional instructions: {additional_instructions.strip()}" if additional_instructions.strip() else ""
     prompt = f"""You are a professional blog writer. Write engaging section content {lang}.
 
