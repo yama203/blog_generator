@@ -175,20 +175,25 @@ with st.sidebar:
             st.session_state.saved_path = None
             st.session_state.editing_mode = False
             st.rerun()
-        st.divider()
+        st.markdown('<div style="height:0.3rem"></div>', unsafe_allow_html=True)
 
     ollama_ok = check_ollama_connection()
+    text_model = list(RECOMMENDED_MODELS.keys())[0]
+
     if ollama_ok:
-        st.success("Ollama 接続中", icon="✅")
-        available_models = list_ollama_models()
-        if available_models:
-            text_model = st.selectbox("テキストモデル", available_models)
-        else:
-            st.warning("モデルがありません。下の「モデルを追加」からダウンロードしてください。", icon="⚠️")
-            text_model = list(RECOMMENDED_MODELS.keys())[0]
+        st.caption("✅ Ollama 接続中")
     else:
         st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
-        text_model = list(RECOMMENDED_MODELS.keys())[0]
+
+    with st.expander("🤖 テキストモデル", expanded=True):
+        if ollama_ok:
+            available_models = list_ollama_models()
+            if available_models:
+                text_model = st.selectbox("テキストモデル", available_models, label_visibility="collapsed")
+            else:
+                st.warning("モデルがありません。「モデルを追加」からダウンロードしてください。", icon="⚠️")
+        else:
+            st.caption("Ollama が起動していません。")
 
     with st.expander("📥 モデルを追加"):
         already = set(list_ollama_models()) if ollama_ok else set()
@@ -221,8 +226,6 @@ with st.sidebar:
                     except Exception as e:
                         dl_status.update(label="❌ ダウンロード失敗", state="error")
                         st.error(str(e))
-
-    st.divider()
 
     image_quality = "標準"
     openai_api_key = ""
@@ -281,7 +284,6 @@ with st.sidebar:
                             )
 
     # ── WordPress sites ────────────────────────────────────────────────────────
-    st.divider()
     with st.expander("🌐 WordPress 設定"):
         _wp_sites = list_wordpress_sites()
         if _wp_sites:
@@ -317,7 +319,7 @@ with st.sidebar:
                 st.warning("すべての項目を入力してください")
 
     # ── Saved articles ─────────────────────────────────────────────────────────
-    st.divider()
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
     st.subheader("📂 保存済み記事")
     _articles = list_articles()
     if not _articles:
