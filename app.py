@@ -406,6 +406,12 @@ if st.session_state.ui_mode == "create":
             placeholder="例：Python、機械学習、初心者向け",
             help="記事のテーマとなる単語をカンマ区切りで入力してください。タイトルを入力した場合は省略できます。",
         )
+        additional_instructions = st.text_area(
+            "追加指示（任意）",
+            placeholder="例：専門用語は避け、中学生でも理解できるように書いてください\n例：各セクションに具体的な数値や事例を必ず含めてください\n例：読者が行動に移せるよう、実践的なアドバイスを重視してください",
+            height=90,
+            help="記事全体に対してAIへの追加指示を入力できます。文体・難易度・構成の方針など自由に指定してください。",
+        )
 
         if not keywords.strip() and not user_title.strip():
             st.caption("※ キーワードまたはタイトルのどちらか一方は必須です。")
@@ -522,7 +528,8 @@ if st.session_state.ui_mode == "create":
             try:
                 st.write("📋 アウトラインを生成中...")
                 outline = generate_outline(
-                    keywords, int(num_sections), text_model, language, user_title, user_sections
+                    keywords, int(num_sections), text_model, language, user_title, user_sections,
+                    additional_instructions=additional_instructions,
                 )
                 title: str = outline["title"]
                 sections_list: list[str] = outline["sections"]
@@ -533,7 +540,8 @@ if st.session_state.ui_mode == "create":
                     st.write(f"✏️ セクション [{i + 1}/{len(sections_list)}] 執筆中: {section_title}")
                     content = generate_section(
                         title, section_title, keywords,
-                        text_model, language, rich_format, section_length, writing_style
+                        text_model, language, rich_format, section_length, writing_style,
+                        additional_instructions=additional_instructions,
                     )
                     img_prompt = None
                     if use_images and i < len(user_section_gen_images) and user_section_gen_images[i]:

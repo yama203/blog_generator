@@ -82,6 +82,7 @@ def generate_outline(
     language: str = "日本語",
     user_title: str = "",
     user_sections: list[str] | None = None,
+    additional_instructions: str = "",
 ) -> dict:
     fixed = [s.strip() for s in (user_sections or [])]
     # Pad to num_sections if shorter
@@ -108,11 +109,12 @@ def generate_outline(
     else:
         section_instruction = f"Create {num_sections} section titles"
 
+    extra = f"\nAdditional instructions: {additional_instructions.strip()}" if additional_instructions.strip() else ""
     prompt = f"""You are a professional blog writer. Create a blog outline {lang}.
 
 Keywords: {keywords}
 {section_instruction}
-Title instruction: {title_instruction}
+Title instruction: {title_instruction}{extra}
 
 Output ONLY this JSON, no other text:
 {{
@@ -148,6 +150,7 @@ def generate_section(
     rich_format: bool = True,
     section_length: str = "標準（約600字）",
     writing_style: str = "丁寧（です・ます調）",
+    additional_instructions: str = "",
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
     word_range = SECTION_LENGTHS.get(section_length, "300-500 words")
@@ -161,12 +164,13 @@ def generate_section(
         if rich_format
         else "Write in plain paragraphs only. Do not use any Markdown formatting (no bold, no lists, no blockquotes)."
     )
+    extra = f"\nAdditional instructions: {additional_instructions.strip()}" if additional_instructions.strip() else ""
     prompt = f"""You are a professional blog writer. Write engaging section content {lang}.
 
 Blog title: {title}
 Section: {section_title}
 Keywords: {keywords}
-Tone/Style: {style_instr}
+Tone/Style: {style_instr}{extra}
 
 Write {word_range}. Output only the content text, no headings.
 {format_instruction}"""
