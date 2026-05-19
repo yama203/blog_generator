@@ -701,8 +701,6 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 st.session_state.saved_path = _p
                 with _status_col:
                     st.success("保存しました", icon="✅")
-    else:
-        st.caption(f"📁 {st.session_state.saved_path}")
 
     # ── Download / WordPress ───────────────────────────────────────────────────
     st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
@@ -806,3 +804,6 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.markdown(f"[投稿を確認する →]({_result['link']})")
                     except Exception as _e:
                         st.error(f"投稿に失敗しました: {_e}")
+
+    if st.session_state.saved_path:
+        st.caption(f"📁 {st.session_state.saved_path}")
