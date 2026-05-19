@@ -693,19 +693,15 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     # ── Save to disk ───────────────────────────────────────────────────────────
     st.divider()
-    _save_col, _status_col = st.columns([1, 3])
-    with _save_col:
-        if st.button("💾 記事を保存", use_container_width=True, type="secondary"):
-            if st.session_state.saved_path:
-                update_article(st.session_state.saved_path, md_str)
-                _save_msg = "上書き保存しました"
-            else:
+    if not st.session_state.saved_path:
+        _save_col, _status_col = st.columns([1, 3])
+        with _save_col:
+            if st.button("💾 記事を保存", use_container_width=True, type="secondary"):
                 _p = save_article(raw_title, md_str, saved_keywords)
                 st.session_state.saved_path = _p
-                _save_msg = "保存しました"
-            with _status_col:
-                st.success(_save_msg, icon="✅")
-    if st.session_state.saved_path:
+                with _status_col:
+                    st.success("保存しました", icon="✅")
+    else:
         st.caption(f"📁 {st.session_state.saved_path}")
 
     # ── Download / WordPress ───────────────────────────────────────────────────
