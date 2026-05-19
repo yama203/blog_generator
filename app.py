@@ -302,6 +302,7 @@ with st.sidebar:
                     if st.button("✏️", key=f"wp_edit_{_ws['name']}", help="編集",
                                  use_container_width=True):
                         st.session_state.wp_editing = _ws["name"]
+                        st.session_state.wp_dialog_open = True
                         st.rerun()
                 with _wc3:
                     if st.button("🗑️", key=f"wp_del_{_ws['name']}", help="削除",
@@ -309,6 +310,7 @@ with st.sidebar:
                         delete_wordpress_site(_ws["name"])
                         if _editing == _ws["name"]:
                             st.session_state.pop("wp_editing", None)
+                        st.session_state.wp_dialog_open = True
                         st.rerun()
 
             if _editing and any(s["name"] == _editing for s in _sites):
@@ -331,12 +333,14 @@ with st.sidebar:
                                 "username": _e_user, "app_password": _e_pw,
                             })
                             st.session_state.pop("wp_editing", None)
+                            st.session_state.wp_dialog_open = True
                             st.rerun()
                         else:
                             st.warning("すべての項目を入力してください")
                 with _es2:
                     if st.button("キャンセル", key="wp_e_cancel", use_container_width=True):
                         st.session_state.pop("wp_editing", None)
+                        st.session_state.wp_dialog_open = True
                         st.rerun()
 
         st.divider()
@@ -358,6 +362,7 @@ with st.sidebar:
                     "username": _wp_user, "app_password": _wp_pw,
                 })
                 st.session_state.wp_add_gen = _add_gen + 1
+                st.session_state.wp_dialog_open = True
                 st.rerun()
             else:
                 st.warning("すべての項目を入力してください")
@@ -367,6 +372,7 @@ with st.sidebar:
         st.session_state.wp_dialog_open = True
 
     if st.session_state.get("wp_dialog_open"):
+        st.session_state.wp_dialog_open = False  # 次のrerunでは自動的に閉じる
         _wp_settings_dialog()
 
     # ── Saved articles ─────────────────────────────────────────────────────────
