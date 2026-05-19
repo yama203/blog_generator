@@ -1,5 +1,6 @@
 import re
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -155,6 +156,7 @@ for key, default in [
     ("edit_image_map", {}),
     ("writing_style", list(WRITING_STYLES.keys())[0]),
     ("manual_edit_saved", False),
+    ("result_created", None),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -331,6 +333,7 @@ with st.sidebar:
                     st.session_state.result_markdown = _data["markdown"]
                     st.session_state.result_title = _data["title"]
                     st.session_state.result_keywords = _data["keywords"]
+                    st.session_state.result_created = _art.get("created", "")
                     st.session_state.generation_done = True
                     st.session_state.saved_path = _art["path"]
                     st.session_state.editing_mode = False
@@ -525,6 +528,7 @@ if st.session_state.ui_mode == "create":
                 st.session_state.result_markdown = result
                 st.session_state.result_title = title
                 st.session_state.result_keywords = keywords
+                st.session_state.result_created = datetime.now().isoformat(timespec="seconds")
                 st.session_state.generation_done = True
                 st.session_state.ui_mode = "edit"
                 status.update(label="✅ 生成完了！", state="complete", expanded=False)
@@ -565,7 +569,22 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             label_visibility="collapsed",
         )
 
-    # ── Revision ───────────────────────────────────────────────────────────────
+    # ── Article info ───────────────────────────────────────────────────────────
+    _char_count = len(re.sub(r'!\[[^\]]*\]\([^\)]+\)|[#*`>\-\[\]()_]', '', md_str).replace(' ', '').replace('\n', ''))
+    _img_count = len(re.findall(r'data:image/', md_str))
+    _created_str = st.session_state.get("result_created") or ""
+    _created_disp = _created_str[:16].replace("T", " ") if _created_str else "—"
+    st.markdown(
+        f'<div style="display:flex;gap:1.5rem;padding:0.5rem 0 1rem;color:var(--text-color,#888);font-size:0.8rem;">'
+        f'<span>📅 {_created_disp}</span>'
+        f'<span>📝 {_char_count:,} 文字</span>'
+        f'<span>🖼️ {_img_count} 枚</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Edit tools ─────────────────────────────────────────────────────────────
+    st.markdown("**編集ツール**")
     with st.expander("✏️ AIで記事を修正する"):
         _section_headings = re.findall(r'^## (.+)$', md_str, flags=re.MULTILINE)
         _target_options = ["全体"] + [f"セクション {i+1}：{t}" for i, t in enumerate(_section_headings)]
@@ -691,8 +710,10 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             st.session_state.manual_edit_saved = False
             st.toast("変更を保存しました", icon="✅")
 
-    # ── Save to disk ───────────────────────────────────────────────────────────
-    st.divider()
+    # ── Export ─────────────────────────────────────────────────────────────────
+    st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
+    st.markdown("**エクスポート**")
+
     if not st.session_state.saved_path:
         _save_col, _status_col = st.columns([1, 3])
         with _save_col:
@@ -701,9 +722,6 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 st.session_state.saved_path = _p
                 with _status_col:
                     st.success("保存しました", icon="✅")
-
-    # ── Download / WordPress ───────────────────────────────────────────────────
-    st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
 
     with st.expander("⬇️ ダウンロード"):
         col_md, col_wp, col_sp = st.columns(3)
