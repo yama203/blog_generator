@@ -389,6 +389,7 @@ with st.sidebar:
         st.session_state["manual_edit_area"] = _new_stripped
         _new_secs = re.findall(r'^## (.+)$', _new_md, flags=re.MULTILINE)
         st.session_state["img_regen_target"] = _new_secs[0] if _new_secs else None
+        st.session_state.pop("wp_dialog_open", None)
         st.session_state.pop("img_regen_prompt", None)
 
     def _render_article_row(art: dict, key_suffix: str = "") -> None:
