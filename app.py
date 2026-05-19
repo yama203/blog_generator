@@ -167,6 +167,7 @@ for key, default in [
     ("result_created", None),
     ("update_checked", False),
     ("update_check_result", None),
+    ("save_success", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -746,6 +747,9 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     # ── Save / Edit tools ──────────────────────────────────────────────────────
     st.divider()
+    if st.session_state.pop("save_success", False):
+        st.success("保存しました", icon="✅")
+
     if not st.session_state.saved_path:
         _save_col, _status_col = st.columns([1, 3])
         with _save_col:
@@ -754,7 +758,8 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             if _do_save:
                 _p = save_article(raw_title, md_str, saved_keywords)
                 st.session_state.saved_path = _p
-                st.success("保存しました", icon="✅")
+                st.session_state.save_success = True
+                st.rerun()
     else:
         st.caption(f"📁 {st.session_state.saved_path}")
 
