@@ -5,9 +5,21 @@ import zipfile
 from html.parser import HTMLParser
 
 
+def _heading_anchor(text: str) -> str:
+    """Generate an anchor ID matching _build_toc in assembler.py (GFM-style)."""
+    plain = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", "-", plain.lower())
+
+
 def _md_to_html(markdown_str: str) -> str:
     import markdown as md_lib
-    return md_lib.markdown(markdown_str, extensions=["extra"])
+    html = md_lib.markdown(markdown_str, extensions=["extra"])
+    # Add id attributes to headings so TOC anchor links work
+    def _add_id(m: re.Match) -> str:
+        level, inner = m.group(1), m.group(2)
+        anchor = _heading_anchor(inner)
+        return f'<h{level} id="{anchor}">{inner}</h{level}>'
+    return re.sub(r"<h([1-6])>(.*?)</h\1>", _add_id, html, flags=re.DOTALL)
 
 
 class _GutenbergBuilder(HTMLParser):
@@ -85,9 +97,10 @@ class _GutenbergBuilder(HTMLParser):
     def _emit(self, tag: str, inner: str) -> None:
         if tag[0] == "h" and len(tag) == 2 and tag[1].isdigit():
             level = tag[1]
+            anchor = _heading_anchor(inner)
             self.blocks.append(
                 f'<!-- wp:heading {{"level":{level}}} -->\n'
-                f'<{tag} class="wp-block-heading">{inner}</{tag}>\n'
+                f'<{tag} class="wp-block-heading" id="{anchor}">{inner}</{tag}>\n'
                 f'<!-- /wp:heading -->'
             )
 
