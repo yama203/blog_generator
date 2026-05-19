@@ -194,7 +194,6 @@ Content preview: {content[:300]}
 
 def _strip_images(markdown: str) -> tuple[str, dict]:
     """Replace base64 image tags with short placeholders to keep LLM context small."""
-    import re
     placeholders: dict[str, str] = {}
 
     def _replace(m: re.Match) -> str:
@@ -212,9 +211,32 @@ def _restore_images(markdown: str, placeholders: dict) -> str:
     return markdown
 
 
+def _extract_heading_images(markdown: str) -> dict[str, list[str]]:
+    """Return {heading: [img_tag, ...]} for each ## section that has images."""
+    result: dict[str, list[str]] = {}
+    parts = re.split(r'\n(?=## )', "\n" + markdown)
+    for part in parts[1:]:
+        head, _, body = part.strip().partition("\n")
+        imgs = re.findall(r'!\[[^\]]*\]\(data:image/[^\)]{20,}\)', body)
+        if imgs:
+            result[head.strip()] = imgs
+    return result
+
+
+def _reinsert_heading_images(markdown: str, heading_images: dict[str, list[str]]) -> str:
+    """Re-insert images immediately after their respective ## headings."""
+    for heading, imgs in heading_images.items():
+        img_block = "\n\n".join(imgs)
+        markdown = re.sub(
+            rf'({re.escape(heading)}\n)',
+            rf'\1\n{img_block}\n\n',
+            markdown, count=1,
+        )
+    return markdown
+
+
 def _parse_sections(markdown: str) -> tuple[str, list[dict]]:
     """Split markdown into (preamble, [{heading, body}, ...]) on ## boundaries."""
-    import re
     parts = re.split(r'\n(?=## )', "\n" + markdown)
     preamble = parts[0].strip()
     sections = []
@@ -242,15 +264,17 @@ def revise_article(
     lang = "in Japanese" if language == "日本語" else "in English"
     style_instr = WRITING_STYLES.get(writing_style, list(WRITING_STYLES.values())[0])
 
-    # Always strip base64 images before sending to LLM
-    stripped, placeholders = _strip_images(markdown)
+    # Save image positions keyed by heading before stripping
+    heading_images = _extract_heading_images(markdown)
+    stripped, _ = _strip_images(markdown)
 
     if section_index is not None:
-        # Revise only the target section, keep the rest untouched
         preamble, sections = _parse_sections(stripped)
         if section_index >= len(sections):
             raise ValueError(f"セクション {section_index + 1} が存在しません")
         target = sections[section_index]
+        # Send only text body (no image placeholders) to LLM
+        text_only_body = re.sub(r'__IMG_\d+__', '', target['body']).strip()
         prompt = f"""You are a professional blog editor. Revise ONLY the section content below {lang} based on the instruction. Output ONLY the revised content (no heading, no explanation).
 
 Instruction: {instruction}
@@ -258,7 +282,7 @@ Tone/Style to maintain: {style_instr}
 
 Section heading: {target['heading']}
 Current content:
-{target['body']}"""
+{text_only_body}"""
         revised_body = _generate(prompt, model).strip()
         sections[section_index]["body"] = revised_body
         result = _assemble_sections(preamble, sections)
@@ -272,4 +296,4 @@ Article:
 {stripped}"""
         result = _generate(prompt, model).strip()
 
-    return _restore_images(result, placeholders)
+    return _reinsert_heading_images(result, heading_images)
