@@ -342,13 +342,18 @@ with st.sidebar:
         st.session_state.pop("img_regen_prompt", None)
 
     def _render_article_row(art: dict, key_suffix: str = "") -> None:
-        _date_hint = art["created"][:10] if art["created"] else ""
+        _date_str = art["created"][:10] if art["created"] else ""
         _c1, _c2 = st.columns([5, 1])
         with _c1:
             if st.button(art["title"], key=f"load_{art['filename']}{key_suffix}",
-                         use_container_width=True, help=_date_hint or None):
+                         use_container_width=True):
                 _load_article_into_session(art)
                 st.rerun()
+            if _date_str:
+                st.markdown(
+                    f'<p style="font-size:0.72rem;color:#888;margin:-0.5rem 0 0.4rem 0.25rem">{_date_str}</p>',
+                    unsafe_allow_html=True,
+                )
         with _c2:
             if st.button("🗑️", key=f"del_{art['filename']}{key_suffix}",
                          use_container_width=True, help="削除"):
