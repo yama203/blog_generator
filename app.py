@@ -330,7 +330,8 @@ with st.sidebar:
                 if st.button(_art["title"], key=f"load_{_art['filename']}", use_container_width=True,
                              help=_date_hint or None):
                     _data = load_article(_art["path"])
-                    st.session_state.result_markdown = _data["markdown"]
+                    _new_md = _data["markdown"]
+                    st.session_state.result_markdown = _new_md
                     st.session_state.result_title = _data["title"]
                     st.session_state.result_keywords = _data["keywords"]
                     st.session_state.result_created = _art.get("created", "")
@@ -338,8 +339,11 @@ with st.sidebar:
                     st.session_state.saved_path = _art["path"]
                     st.session_state.editing_mode = False
                     st.session_state.ui_mode = "edit"
-                    for _k in ("manual_edit_area", "img_regen_target", "img_regen_prompt"):
-                        st.session_state.pop(_k, None)
+                    _new_stripped, _ = _strip_images_for_edit(_new_md)
+                    st.session_state["manual_edit_area"] = _new_stripped
+                    _new_secs = re.findall(r'^## (.+)$', _new_md, flags=re.MULTILINE)
+                    st.session_state["img_regen_target"] = _new_secs[0] if _new_secs else None
+                    st.session_state.pop("img_regen_prompt", None)
                     st.rerun()
             with _c2:
                 if st.button("🗑️", key=f"del_{_art['filename']}", use_container_width=True,
@@ -533,8 +537,11 @@ if st.session_state.ui_mode == "create":
                 st.session_state.result_created = datetime.now().isoformat(timespec="seconds")
                 st.session_state.generation_done = True
                 st.session_state.ui_mode = "edit"
-                for _k in ("manual_edit_area", "img_regen_target", "img_regen_prompt"):
-                    st.session_state.pop(_k, None)
+                _gen_stripped, _ = _strip_images_for_edit(result)
+                st.session_state["manual_edit_area"] = _gen_stripped
+                _gen_secs = re.findall(r'^## (.+)$', result, flags=re.MULTILINE)
+                st.session_state["img_regen_target"] = _gen_secs[0] if _gen_secs else None
+                st.session_state.pop("img_regen_prompt", None)
                 status.update(label="✅ 生成完了！", state="complete", expanded=False)
                 st.rerun()
 
