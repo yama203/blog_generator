@@ -457,7 +457,7 @@ if st.session_state.ui_mode == "create":
             help="ON: 記事の冒頭に目次（各セクションへのリンク）を挿入します。",
         )
 
-    with st.expander("📝 セクションの見出し・画像を指定する（任意）"):
+    with st.expander("📝 セクションの見出し・画像を指定する（任意）", expanded=True):
         st.caption("見出しが空欄のセクションは AI が自動生成します。画像プロンプトも空欄なら AI が自動生成します。")
         user_sections: list[str] = []
         user_section_gen_images: list[bool] = []
