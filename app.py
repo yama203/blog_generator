@@ -115,6 +115,12 @@ from core.config import (
     delete_wordpress_site,
 )
 from core.wordpress_client import get_post_types, publish_article, test_connection
+from core.updater import (
+    download_and_apply,
+    get_current_version,
+    get_latest_release,
+    is_update_available,
+)
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -159,6 +165,8 @@ for key, default in [
     ("writing_style", list(WRITING_STYLES.keys())[0]),
     ("manual_edit_saved", False),
     ("result_created", None),
+    ("update_checked", False),
+    ("update_check_result", None),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -439,6 +447,39 @@ with st.sidebar:
                          key="show_all_articles", use_container_width=False):
                 _show_all_articles_dialog()
             st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── App update ─────────────────────────────────────────────────────────────
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
+    _cur_ver = get_current_version()
+    st.caption(f"バージョン {_cur_ver}")
+    if st.button("🔄 アップデートを確認", use_container_width=True, key="check_update"):
+        st.session_state.update_check_result = get_latest_release()
+        st.session_state.update_checked = True
+
+    if st.session_state.get("update_checked"):
+        _rel = st.session_state.get("update_check_result")
+        if _rel is None:
+            st.warning("GitHub に接続できませんでした。", icon="⚠️")
+        elif is_update_available(_cur_ver, _rel["version"]):
+            st.info(f"v{_rel['version']} が利用可能です。")
+            if _rel.get("notes"):
+                with st.expander("更新内容"):
+                    st.markdown(_rel["notes"])
+            if st.button(f"⬇️ v{_rel['version']} をインストール",
+                         key="do_update", use_container_width=True, type="primary"):
+                with st.spinner("ダウンロード中..."):
+                    try:
+                        download_and_apply(_rel["zip_url"], _rel["version"])
+                        st.session_state.update_checked = False
+                        st.success(
+                            "✅ アップデート完了！\n\n"
+                            "アプリを再起動してください（.app をもう一度クリック）。",
+                        )
+                    except Exception as _e:
+                        st.error(f"アップデートに失敗しました: {_e}")
+        else:
+            st.success(f"最新版です（v{_cur_ver}）", icon="✅")
+            st.session_state.update_checked = False
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CREATE MODE
