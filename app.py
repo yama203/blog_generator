@@ -464,7 +464,7 @@ if st.session_state.ui_mode == "create":
             _cols = st.columns(2)
             for _i, (_key, _label) in enumerate(_labels.items()):
                 with _cols[_i % 2]:
-                    if st.checkbox(_label, value=_key != "code", key=f"rf_{_key}"):
+                    if st.checkbox(_label, value=_key not in ("code", "blockquote"), key=f"rf_{_key}"):
                         rich_elements.add(_key)
         include_toc = st.toggle(
             "目次を生成する",
