@@ -323,38 +323,60 @@ with st.sidebar:
     st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
     st.subheader("📂 保存済み記事")
     _articles = list_articles()
+
+    def _load_article_into_session(art: dict) -> None:
+        _data = load_article(art["path"])
+        _new_md = _data["markdown"]
+        st.session_state.result_markdown = _new_md
+        st.session_state.result_title = _data["title"]
+        st.session_state.result_keywords = _data["keywords"]
+        st.session_state.result_created = art.get("created", "")
+        st.session_state.generation_done = True
+        st.session_state.saved_path = art["path"]
+        st.session_state.editing_mode = False
+        st.session_state.ui_mode = "edit"
+        _new_stripped, _ = _strip_images_for_edit(_new_md)
+        st.session_state["manual_edit_area"] = _new_stripped
+        _new_secs = re.findall(r'^## (.+)$', _new_md, flags=re.MULTILINE)
+        st.session_state["img_regen_target"] = _new_secs[0] if _new_secs else None
+        st.session_state.pop("img_regen_prompt", None)
+
+    def _render_article_row(art: dict, key_suffix: str = "") -> None:
+        _date_hint = art["created"][:10] if art["created"] else ""
+        _c1, _c2 = st.columns([5, 1])
+        with _c1:
+            if st.button(art["title"], key=f"load_{art['filename']}{key_suffix}",
+                         use_container_width=True, help=_date_hint or None):
+                _load_article_into_session(art)
+                st.rerun()
+        with _c2:
+            if st.button("🗑️", key=f"del_{art['filename']}{key_suffix}",
+                         use_container_width=True, help="削除"):
+                delete_article(art["path"])
+                if st.session_state.saved_path == art["path"]:
+                    st.session_state.saved_path = None
+                st.rerun()
+
+    @st.dialog("📂 保存済み記事", width="large")
+    def _show_all_articles_dialog() -> None:
+        for _art in _articles:
+            _render_article_row(_art, key_suffix="_dlg")
+
+    _SIDEBAR_MAX = 3
     if not _articles:
         st.caption("保存された記事はまだありません。")
     else:
-        for _art in _articles:
-            _date_hint = _art["created"][:10] if _art["created"] else ""
-            _c1, _c2 = st.columns([5, 1])
-            with _c1:
-                if st.button(_art["title"], key=f"load_{_art['filename']}", use_container_width=True,
-                             help=_date_hint or None):
-                    _data = load_article(_art["path"])
-                    _new_md = _data["markdown"]
-                    st.session_state.result_markdown = _new_md
-                    st.session_state.result_title = _data["title"]
-                    st.session_state.result_keywords = _data["keywords"]
-                    st.session_state.result_created = _art.get("created", "")
-                    st.session_state.generation_done = True
-                    st.session_state.saved_path = _art["path"]
-                    st.session_state.editing_mode = False
-                    st.session_state.ui_mode = "edit"
-                    _new_stripped, _ = _strip_images_for_edit(_new_md)
-                    st.session_state["manual_edit_area"] = _new_stripped
-                    _new_secs = re.findall(r'^## (.+)$', _new_md, flags=re.MULTILINE)
-                    st.session_state["img_regen_target"] = _new_secs[0] if _new_secs else None
-                    st.session_state.pop("img_regen_prompt", None)
-                    st.rerun()
-            with _c2:
-                if st.button("🗑️", key=f"del_{_art['filename']}", use_container_width=True,
-                             help="削除"):
-                    delete_article(_art["path"])
-                    if st.session_state.saved_path == _art["path"]:
-                        st.session_state.saved_path = None
-                    st.rerun()
+        for _art in _articles[:_SIDEBAR_MAX]:
+            _render_article_row(_art)
+        if len(_articles) > _SIDEBAR_MAX:
+            st.markdown(
+                '<div style="text-align:right">',
+                unsafe_allow_html=True,
+            )
+            if st.button(f"もっと見る（残り {len(_articles) - _SIDEBAR_MAX} 件）",
+                         key="show_all_articles", use_container_width=False):
+                _show_all_articles_dialog()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CREATE MODE
