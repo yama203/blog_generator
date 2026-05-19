@@ -774,39 +774,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 mime="application/zip",
                 use_container_width=True,
                 help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
-=======
-    # ── Download ───────────────────────────────────────────────────────────────
-    st.divider()
-    st.subheader("⬇️ ダウンロード")
-    col_md, col_wp, col_sp = st.columns(3)
-
-    with col_md:
-        st.download_button(
-            "📄 Markdown",
-            data=md_str,
-            file_name=f"{slug}.md",
-            mime="text/markdown",
-            use_container_width=True,
-            help="汎用 Markdown ファイル。Hugo や Notion などにも使えます。",
-        )
-    with col_wp:
-        st.download_button(
-            "🔵 WordPress ZIP",
-            data=_wordpress_zip(raw_title, md_str),
-            file_name=f"{slug}_wordpress.zip",
-            mime="application/zip",
-            use_container_width=True,
-            help="post.html + images/ フォルダを含む ZIP。画像をメディアライブラリにアップロードし、post.html の URL を差し替えてから貼り付けてください。",
-        )
-    with col_sp:
-        st.download_button(
-            "🟢 Shopify ZIP",
-            data=_shopify_zip(raw_title, md_str),
-            file_name=f"{slug}_shopify.zip",
-            mime="application/zip",
-            use_container_width=True,
-            help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
-        )
+            )
 
     with st.expander("🌐 WordPress に投稿"):
         _wp_sites = list_wordpress_sites()
