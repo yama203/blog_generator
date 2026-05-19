@@ -347,7 +347,7 @@ with st.sidebar:
         _date_str = art["created"][:10] if art["created"] else ""
         if _date_str:
             st.markdown(
-                f'<p style="font-size:0.72rem;color:#888;margin:0.1rem 0 -0.2rem 0.25rem">{_date_str}</p>',
+                f'<p style="font-size:0.72rem;color:#888;margin:0 0 0.3rem 0.25rem">{_date_str}</p>',
                 unsafe_allow_html=True,
             )
         _c1, _c2 = st.columns([5, 1])
