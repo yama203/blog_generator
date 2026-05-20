@@ -775,7 +775,11 @@ if st.session_state.ui_mode == "create":
 elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
 
     if st.session_state.pop("scroll_to_top", False):
-        st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0, 0);</script>", height=0)
+        import time as _time
+        st.components.v1.html(
+            f"<script>window.parent.document.querySelector('section.main').scrollTo(0,0);/* {_time.time()} */</script>",
+            height=0,
+        )
 
     raw_title = st.session_state.result_title or "blog_post"
     saved_keywords = st.session_state.result_keywords
