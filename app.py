@@ -202,7 +202,10 @@ with st.sidebar:
         use_openai_text = text_engine == "OpenAI (GPT-4o-mini)"
 
         if use_openai_text:
-            st.caption("APIキーは「OpenAI 画像生成設定」と共通です。")
+            if openai_api_key:
+                st.caption("✅ API キー設定済み")
+            else:
+                st.warning("「🔑 OpenAI API キー」欄でキーを設定してください。", icon="⚠️")
         else:
             if ollama_ok:
                 st.caption("✅ Ollama 接続中")
@@ -251,7 +254,7 @@ with st.sidebar:
     image_quality = "標準"
     openai_api_key = ""
 
-    with st.expander("🎨 OpenAI 画像生成設定"):
+    with st.expander("🔑 OpenAI API キー"):
         if not OPENAI_AVAILABLE:
             st.warning("openai パッケージが見つかりません。", icon="⚠️")
         else:
@@ -262,7 +265,8 @@ with st.sidebar:
                 value=_saved_key,
                 type="password",
                 placeholder="sk-...",
-                help="環境変数 OPENAI_API_KEY でも設定できます",
+                help="テキスト生成（GPT-4o-mini）・画像生成で共用されます。\n環境変数 OPENAI_API_KEY でも設定できます。",
+                label_visibility="collapsed",
             )
             _key_col, _del_col = st.columns([3, 1])
             with _key_col:
@@ -280,8 +284,14 @@ with st.sidebar:
                     st.info("削除しました")
 
             if _saved_key:
-                st.caption("✅ 保存済みのキーを使用中")
+                st.caption("✅ 保存済み")
+            else:
+                st.caption("テキスト生成（GPT-4o-mini）・画像生成で使用します")
 
+    with st.expander("🎨 画像生成設定"):
+        if not OPENAI_AVAILABLE:
+            st.warning("openai パッケージが見つかりません。", icon="⚠️")
+        else:
             image_quality = st.select_slider(
                 "品質",
                 options=["標準", "高品質"],
@@ -290,7 +300,7 @@ with st.sidebar:
             )
             if st.button("🔍 接続テスト", key="test_dalle"):
                 if not openai_api_key:
-                    st.error("API キーを入力してください。")
+                    st.error("API キーを「OpenAI API キー」欄で設定してください。")
                 else:
                     with st.spinner("利用可能な画像モデルを確認中..."):
                         from core.dalle_generator import detect_available_model, OPENAI_IMAGE_MODELS
