@@ -191,6 +191,43 @@ with st.sidebar:
     ollama_ok = check_ollama_connection()
     text_model = list(RECOMMENDED_MODELS.keys())[0]
 
+    image_quality = "標準"
+    openai_api_key = ""
+
+    with st.expander("🔑 OpenAI API キー"):
+        if not OPENAI_AVAILABLE:
+            st.warning("openai パッケージが見つかりません。", icon="⚠️")
+        else:
+            import os
+            _saved_key = load_openai_key() or os.environ.get("OPENAI_API_KEY", "")
+            openai_api_key = st.text_input(
+                "API キー",
+                value=_saved_key,
+                type="password",
+                placeholder="sk-...",
+                help="テキスト生成（GPT-4o-mini）・画像生成で共用されます。\n環境変数 OPENAI_API_KEY でも設定できます。",
+                label_visibility="collapsed",
+            )
+            _key_col, _del_col = st.columns([3, 1])
+            with _key_col:
+                if st.button("💾 保存", key="save_key", use_container_width=True,
+                             help="入力したキーをこのMacに保存します"):
+                    if openai_api_key:
+                        save_openai_key(openai_api_key)
+                        st.success("保存しました", icon="✅")
+                    else:
+                        st.warning("キーが入力されていません")
+            with _del_col:
+                if st.button("🗑️", key="del_key", use_container_width=True,
+                             help="保存されたキーを削除します"):
+                    delete_openai_key()
+                    st.info("削除しました")
+
+            if _saved_key:
+                st.caption("✅ 保存済み")
+            else:
+                st.caption("テキスト生成（GPT-4o-mini）・画像生成で使用します")
+
     with st.expander("🤖 テキスト生成", expanded=True):
         text_engine = st.radio(
             "エンジン",
@@ -250,43 +287,6 @@ with st.sidebar:
                         except Exception as e:
                             dl_status.update(label="❌ ダウンロード失敗", state="error")
                             st.error(str(e))
-
-    image_quality = "標準"
-    openai_api_key = ""
-
-    with st.expander("🔑 OpenAI API キー"):
-        if not OPENAI_AVAILABLE:
-            st.warning("openai パッケージが見つかりません。", icon="⚠️")
-        else:
-            import os
-            _saved_key = load_openai_key() or os.environ.get("OPENAI_API_KEY", "")
-            openai_api_key = st.text_input(
-                "API キー",
-                value=_saved_key,
-                type="password",
-                placeholder="sk-...",
-                help="テキスト生成（GPT-4o-mini）・画像生成で共用されます。\n環境変数 OPENAI_API_KEY でも設定できます。",
-                label_visibility="collapsed",
-            )
-            _key_col, _del_col = st.columns([3, 1])
-            with _key_col:
-                if st.button("💾 保存", key="save_key", use_container_width=True,
-                             help="入力したキーをこのMacに保存します"):
-                    if openai_api_key:
-                        save_openai_key(openai_api_key)
-                        st.success("保存しました", icon="✅")
-                    else:
-                        st.warning("キーが入力されていません")
-            with _del_col:
-                if st.button("🗑️", key="del_key", use_container_width=True,
-                             help="保存されたキーを削除します"):
-                    delete_openai_key()
-                    st.info("削除しました")
-
-            if _saved_key:
-                st.caption("✅ 保存済み")
-            else:
-                st.caption("テキスト生成（GPT-4o-mini）・画像生成で使用します")
 
     with st.expander("🎨 画像生成設定"):
         if not OPENAI_AVAILABLE:
