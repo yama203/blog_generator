@@ -223,6 +223,22 @@ with st.sidebar:
                     delete_openai_key()
                     st.info("削除しました")
 
+            if st.button("🔍 接続テスト", key="test_dalle"):
+                if not openai_api_key:
+                    st.error("API キーを入力してください。")
+                else:
+                    with st.spinner("確認中..."):
+                        from core.dalle_generator import detect_available_model, OPENAI_IMAGE_MODELS
+                        found = detect_available_model(openai_api_key)
+                        if found:
+                            st.success(f"✅ 接続OK（画像モデル: `{found}`）")
+                        else:
+                            st.error(
+                                f"❌ 画像生成モデルが見つかりません。\n\n"
+                                f"確認済みモデル: {', '.join(OPENAI_IMAGE_MODELS)}\n\n"
+                                "OpenAI アカウントで画像生成が有効か確認してください。"
+                            )
+
             if _saved_key:
                 st.caption("✅ 保存済み")
             else:
@@ -298,21 +314,6 @@ with st.sidebar:
                 value="標準",
                 help="標準: $0.04/枚 / 高品質(HD): $0.08/枚",
             )
-            if st.button("🔍 接続テスト", key="test_dalle"):
-                if not openai_api_key:
-                    st.error("API キーを「OpenAI API キー」欄で設定してください。")
-                else:
-                    with st.spinner("利用可能な画像モデルを確認中..."):
-                        from core.dalle_generator import detect_available_model, OPENAI_IMAGE_MODELS
-                        found = detect_available_model(openai_api_key)
-                        if found:
-                            st.success(f"✅ 利用可能モデル: `{found}`")
-                        else:
-                            st.error(
-                                f"❌ 画像生成モデルが見つかりません。\n\n"
-                                f"確認済みモデル: {', '.join(OPENAI_IMAGE_MODELS)}\n\n"
-                                "OpenAI アカウントで画像生成が有効か確認してください。"
-                            )
 
     # ── WordPress sites ────────────────────────────────────────────────────────
     @st.dialog("🌐 WordPress 設定", width="large")
