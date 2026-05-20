@@ -6,6 +6,8 @@ import requests
 OLLAMA_BASE_URL = "http://localhost:11434"
 REQUEST_TIMEOUT = 300
 
+OPENAI_TEXT_MODEL = "gpt-4o-mini"
+
 
 RECOMMENDED_MODELS: dict[str, str] = {
     "gemma2:9b":    "軽量・高速（推奨）　約 5GB",
@@ -67,6 +69,25 @@ def _generate(prompt: str, model: str, keep_alive: int = 300) -> str:
     return r.json()["response"]
 
 
+def _generate_openai(prompt: str, api_key: str) -> str:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=OPENAI_TEXT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        timeout=REQUEST_TIMEOUT,
+    )
+    return response.choices[0].message.content or ""
+
+
+def _llm(prompt: str, model: str, text_engine: str = "ollama",
+         openai_api_key: str = "", keep_alive: int = 300) -> str:
+    """Unified LLM call: routes to Ollama or OpenAI based on text_engine."""
+    if text_engine == "openai":
+        return _generate_openai(prompt, openai_api_key)
+    return _generate(prompt, model, keep_alive)
+
+
 def _extract_json(text: str) -> dict:
     text = re.sub(r"```(?:json)?\n?(.*?)\n?```", r"\1", text, flags=re.DOTALL).strip()
     start, end = text.find("{"), text.rfind("}")
@@ -83,6 +104,8 @@ def generate_outline(
     user_title: str = "",
     user_sections: list[str] | None = None,
     additional_instructions: str = "",
+    text_engine: str = "ollama",
+    openai_api_key: str = "",
 ) -> dict:
     fixed = [s.strip() for s in (user_sections or [])]
     # Pad to num_sections if shorter
@@ -122,7 +145,7 @@ Output ONLY this JSON, no other text:
   "sections": ["section 1 title", "section 2 title"]
 }}
 The sections array must have exactly {num_sections} items."""
-    return _extract_json(_generate(prompt, model))
+    return _extract_json(_llm(prompt, model, text_engine, openai_api_key))
 
 
 SECTION_LENGTHS: dict[str, str] = {
@@ -161,6 +184,8 @@ def generate_section(
     writing_style: str = "丁寧（です・ます調）",
     additional_instructions: str = "",
     rich_elements: set[str] | None = None,
+    text_engine: str = "ollama",
+    openai_api_key: str = "",
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
     word_range = SECTION_LENGTHS.get(section_length, "300-500 words")
@@ -190,10 +215,11 @@ Tone/Style: {style_instr}{extra}
 
 Write {word_range}. Output only the content text, no headings.
 {format_instruction}"""
-    return _generate(prompt, model).strip()
+    return _llm(prompt, model, text_engine, openai_api_key).strip()
 
 
-def generate_image_prompt(section_title: str, content: str, model: str) -> str:
+def generate_image_prompt(section_title: str, content: str, model: str,
+                          text_engine: str = "ollama", openai_api_key: str = "") -> str:
     style_instruction = """Rules:
 - Output ONLY the prompt, no explanation
 - Write a natural English sentence describing the scene (not keyword lists)
@@ -209,7 +235,7 @@ Section: {section_title}
 Content preview: {content[:300]}
 
 {style_instruction}"""
-    return _generate(prompt, model).strip().strip('"').strip("'")
+    return _llm(prompt, model, text_engine, openai_api_key).strip().strip('"').strip("'")
 
 
 def _strip_images(markdown: str) -> tuple[str, dict]:
@@ -280,6 +306,8 @@ def revise_article(
     language: str = "日本語",
     section_index: int | None = None,
     writing_style: str = "丁寧（です・ます調）",
+    text_engine: str = "ollama",
+    openai_api_key: str = "",
 ) -> str:
     lang = "in Japanese" if language == "日本語" else "in English"
     style_instr = WRITING_STYLES.get(writing_style, list(WRITING_STYLES.values())[0])
@@ -303,7 +331,7 @@ Tone/Style to maintain: {style_instr}
 Section heading: {target['heading']}
 Current content:
 {text_only_body}"""
-        revised_body = _generate(prompt, model).strip()
+        revised_body = _llm(prompt, model, text_engine, openai_api_key).strip()
         sections[section_index]["body"] = revised_body
         result = _assemble_sections(preamble, sections)
     else:
@@ -314,6 +342,6 @@ Tone/Style to maintain: {style_instr}
 
 Article:
 {stripped}"""
-        result = _generate(prompt, model).strip()
+        result = _llm(prompt, model, text_engine, openai_api_key).strip()
 
     return _reinsert_heading_images(result, heading_images)

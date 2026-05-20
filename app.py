@@ -191,53 +191,63 @@ with st.sidebar:
     ollama_ok = check_ollama_connection()
     text_model = list(RECOMMENDED_MODELS.keys())[0]
 
-    if ollama_ok:
-        st.caption("✅ Ollama 接続中")
-    else:
-        st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
-
-    with st.expander("🤖 テキストモデル", expanded=True):
-        if ollama_ok:
-            available_models = list_ollama_models()
-            if available_models:
-                text_model = st.selectbox("使用するモデル", available_models, label_visibility="visible")
-            else:
-                st.warning("モデルがありません。", icon="⚠️")
-        else:
-            st.caption("Ollama が起動していません。")
-
-        st.caption("モデルを追加")
-        already = set(list_ollama_models()) if ollama_ok else set()
-        model_choice = st.selectbox(
-            "追加するモデル",
-            list(RECOMMENDED_MODELS.keys()),
-            format_func=lambda m: (
-                f"{'✅ ' if m in already else ''}{m}  —  {RECOMMENDED_MODELS[m]}"
-            ),
-            key="pull_model_select",
+    with st.expander("🤖 テキスト生成", expanded=True):
+        text_engine = st.radio(
+            "エンジン",
+            ["Ollama（ローカル）", "OpenAI (GPT-4o-mini)"],
+            key="text_engine_radio",
+            horizontal=True,
             label_visibility="collapsed",
         )
-        if not ollama_ok:
-            st.info("Ollama が起動していないとダウンロードできません。")
-        elif model_choice in already:
-            st.info(f"{model_choice} はインストール済みです。")
+        use_openai_text = text_engine == "OpenAI (GPT-4o-mini)"
+
+        if use_openai_text:
+            st.caption("APIキーは「OpenAI 画像生成設定」と共通です。")
         else:
-            if st.button("⬇️ ダウンロード開始", key="pull_btn", use_container_width=True):
-                with st.status(f"{model_choice} をダウンロード中...", expanded=True) as dl_status:
-                    progress_bar = st.progress(0.0)
-                    status_text = st.empty()
-                    try:
-                        for update in pull_model(model_choice):
-                            msg = update.get("status", "")
-                            if "total" in update and "completed" in update and update["total"] > 0:
-                                pct = update["completed"] / update["total"]
-                                progress_bar.progress(min(pct, 1.0))
-                            status_text.caption(msg)
-                        dl_status.update(label=f"✅ {model_choice} のダウンロード完了", state="complete")
-                        st.rerun()
-                    except Exception as e:
-                        dl_status.update(label="❌ ダウンロード失敗", state="error")
-                        st.error(str(e))
+            if ollama_ok:
+                st.caption("✅ Ollama 接続中")
+                available_models = list_ollama_models()
+                if available_models:
+                    text_model = st.selectbox("使用するモデル", available_models, label_visibility="visible")
+                else:
+                    st.warning("モデルがありません。まず下のメニューからダウンロードしてください。", icon="⚠️")
+            else:
+                st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
+
+        st.caption("モデルを追加")
+        if not use_openai_text:
+            st.caption("モデルを追加")
+            already = set(list_ollama_models()) if ollama_ok else set()
+            model_choice = st.selectbox(
+                "追加するモデル",
+                list(RECOMMENDED_MODELS.keys()),
+                format_func=lambda m: (
+                    f"{'✅ ' if m in already else ''}{m}  —  {RECOMMENDED_MODELS[m]}"
+                ),
+                key="pull_model_select",
+                label_visibility="collapsed",
+            )
+            if not ollama_ok:
+                st.info("Ollama が起動していないとダウンロードできません。")
+            elif model_choice in already:
+                st.info(f"{model_choice} はインストール済みです。")
+            else:
+                if st.button("⬇️ ダウンロード開始", key="pull_btn", use_container_width=True):
+                    with st.status(f"{model_choice} をダウンロード中...", expanded=True) as dl_status:
+                        progress_bar = st.progress(0.0)
+                        status_text = st.empty()
+                        try:
+                            for update in pull_model(model_choice):
+                                msg = update.get("status", "")
+                                if "total" in update and "completed" in update and update["total"] > 0:
+                                    pct = update["completed"] / update["total"]
+                                    progress_bar.progress(min(pct, 1.0))
+                                status_text.caption(msg)
+                            dl_status.update(label=f"✅ {model_choice} のダウンロード完了", state="complete")
+                            st.rerun()
+                        except Exception as e:
+                            dl_status.update(label="❌ ダウンロード失敗", state="error")
+                            st.error(str(e))
 
     image_quality = "標準"
     openai_api_key = ""
@@ -627,14 +637,26 @@ if st.session_state.ui_mode == "create":
     # ── Generate button ─────────────────────────────────────────────────────────
     has_input = bool(keywords.strip() or user_title.strip())
 
+    _engine_ready = (use_openai_text and bool(openai_api_key)) or \
+                    (not use_openai_text and ollama_ok)
     generate_clicked = st.button(
         "🚀 ブログを生成する",
         type="primary",
-        disabled=not ollama_ok or not has_input,
+        disabled=not has_input,
         use_container_width=True,
     )
 
     if generate_clicked and has_input:
+        # ── バリデーション ──────────────────────────────────────────────────────
+        if use_openai_text and not openai_api_key:
+            st.error("OpenAI API キーが設定されていません。サイドバーの「OpenAI 画像生成設定」から入力してください。", icon="❌")
+            st.stop()
+        if not use_openai_text and not ollama_ok:
+            st.error("Ollama に接続できません。Ollama を起動してから再試行してください。", icon="❌")
+            st.stop()
+        if not use_openai_text and ollama_ok and not list_ollama_models():
+            st.error("Ollama にモデルがインストールされていません。\nサイドバーの「テキスト生成」からモデルをダウンロードしてください。", icon="❌")
+            st.stop()
         st.session_state.generation_done = False
         st.session_state.result_markdown = None
         st.session_state.saved_path = None
@@ -644,9 +666,12 @@ if st.session_state.ui_mode == "create":
         with st.status("生成中...", expanded=True) as status:
             try:
                 st.write("📋 アウトラインを生成中...")
+                _eng = "openai" if use_openai_text else "ollama"
+                _oai_key = openai_api_key if use_openai_text else ""
                 outline = generate_outline(
                     keywords, int(num_sections), text_model, language, user_title, user_sections,
                     additional_instructions=additional_instructions,
+                    text_engine=_eng, openai_api_key=_oai_key,
                 )
                 title: str = outline["title"]
                 sections_list: list[str] = outline["sections"]
@@ -660,11 +685,14 @@ if st.session_state.ui_mode == "create":
                         text_model, language, rich_format, section_length, writing_style,
                         additional_instructions=additional_instructions,
                         rich_elements=rich_elements,
+                        text_engine=_eng, openai_api_key=_oai_key,
                     )
                     img_prompt = None
                     if use_images and i < len(user_section_gen_images) and user_section_gen_images[i]:
                         custom = user_section_img_prompts[i] if i < len(user_section_img_prompts) else ""
-                        img_prompt = custom.strip() if custom.strip() else generate_image_prompt(section_title, content, text_model)
+                        img_prompt = custom.strip() if custom.strip() else generate_image_prompt(
+                            section_title, content, text_model, text_engine=_eng, openai_api_key=_oai_key,
+                        )
                     sections_data.append(
                         {"heading": section_title, "content": content, "image_prompt": img_prompt, "image_path": None}
                     )
@@ -783,12 +811,16 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
             height=100,
             label_visibility="collapsed",
         )
-        if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not ollama_ok):
+        _text_ready = use_openai_text or ollama_ok
+        if st.button("🔄 修正する", disabled=not revision_prompt.strip() or not _text_ready):
             with st.spinner("修正中..."):
                 try:
+                    _r_eng = "openai" if use_openai_text else "ollama"
+                    _r_key = openai_api_key if use_openai_text else ""
                     revised = revise_article(
                         md_str, revision_prompt, text_model, language,
                         _section_index, st.session_state.writing_style,
+                        text_engine=_r_eng, openai_api_key=_r_key,
                     )
                     st.session_state.result_markdown = revised
                     if st.session_state.saved_path:
@@ -844,11 +876,16 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             try:
                                 if _img_prompt_input.strip():
                                     _final_prompt = _img_prompt_input.strip()
-                                elif ollama_ok:
+                                elif use_openai_text or ollama_ok:
                                     _body = _extract_section_body(md_str, _img_target)
-                                    _final_prompt = generate_image_prompt(_img_target, _body, text_model)
+                                    _p_eng = "openai" if use_openai_text else "ollama"
+                                    _p_key = openai_api_key if use_openai_text else ""
+                                    _final_prompt = generate_image_prompt(
+                                        _img_target, _body, text_model,
+                                        text_engine=_p_eng, openai_api_key=_p_key,
+                                    )
                                 else:
-                                    st.error("Ollama が起動していないためプロンプトを自動生成できません。プロンプトを直接入力してください。")
+                                    st.error("テキスト生成エンジンが利用できません。プロンプトを直接入力してください。")
                                     st.stop()
 
                                 _img_gen = DalleGenerator(_regen_key, _img_quality)
