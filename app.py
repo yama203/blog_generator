@@ -1008,7 +1008,12 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 help="post.html + images/ フォルダを含む ZIP。画像を Shopify ファイルにアップロードし、post.html の URL を差し替えてから「HTML を表示」に貼り付けてください。",
             )
 
-    with st.expander("🌐 WordPress に投稿"):
+    # 内側のウィジェットが一度でも操作されていたらアコーディオンを開いたままにする
+    _wp_exp_open = any(k in st.session_state for k in (
+        "wp_site_select", "wp_status_select", "wp_post_type_select",
+        "wp_schedule_toggle", "wp_editor_format",
+    ))
+    with st.expander("🌐 WordPress に投稿", expanded=_wp_exp_open):
         _wp_sites = list_wordpress_sites()
         if not _wp_sites:
             st.info("サイドバーの「WordPress 設定」からサイトを登録してください。", icon="ℹ️")
