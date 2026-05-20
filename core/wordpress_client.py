@@ -133,6 +133,7 @@ def publish_article(
     rest_base: str,
     status: str,
     use_blocks: bool = False,
+    scheduled_at: str = "",
 ) -> dict:
     """
     WordPress に記事を投稿する。
@@ -170,10 +171,15 @@ def publish_article(
     md_body = re.sub(r'^# .+\n?', '', processed_md, count=1).strip()
     html = _md_to_gutenberg(md_body) if use_blocks else _md_to_html(md_body)
 
+    payload: dict = {"title": title, "content": html, "status": status}
+    if scheduled_at:
+        payload["date"] = scheduled_at      # サイトのタイムゾーンで解釈される
+        payload["status"] = "future"        # 予約投稿には future が必要
+
     r = requests.post(
         f"{base_url}/wp-json/wp/v2/{rest_base}",
         auth=auth,
-        json={"title": title, "content": html, "status": status},
+        json=payload,
         timeout=60,
     )
     r.raise_for_status()

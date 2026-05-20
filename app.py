@@ -1059,6 +1059,31 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                     "ステータス", list(_status_map.keys()), key="wp_status_select"
                 )]
 
+            # ── 予約投稿 ──────────────────────────────────────────────────────
+            import datetime as _dt
+            _schedule = st.toggle("🕐 予約投稿", key="wp_schedule_toggle")
+            _scheduled_at = ""
+            if _schedule:
+                _sched_col1, _sched_col2 = st.columns(2)
+                with _sched_col1:
+                    _sched_date = st.date_input(
+                        "公開日",
+                        value=_dt.date.today() + _dt.timedelta(days=1),
+                        min_value=_dt.date.today(),
+                        key="wp_sched_date",
+                        label_visibility="visible",
+                    )
+                with _sched_col2:
+                    _sched_time = st.time_input(
+                        "公開時刻",
+                        value=_dt.time(9, 0),
+                        key="wp_sched_time",
+                        step=300,
+                        label_visibility="visible",
+                    )
+                _scheduled_at = _dt.datetime.combine(_sched_date, _sched_time).strftime("%Y-%m-%dT%H:%M:%S")
+                st.caption(f"予約日時: {_sched_date.strftime('%Y年%m月%d日')} {_sched_time.strftime('%H:%M')}（サイトのタイムゾーン）")
+
             _wp_use_blocks = st.radio(
                 "エディタ形式",
                 ["クラシック（HTML）", "ブロック（Gutenberg）"],
@@ -1066,13 +1091,20 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 key="wp_editor_format",
             ) == "ブロック（Gutenberg）"
 
-            if st.button("📤 WordPress に投稿する", type="primary", key="wp_publish_btn", use_container_width=True):
+            _btn_label = f"📅 {_dt.datetime.combine(_sched_date, _sched_time).strftime('%m/%d %H:%M')} に予約投稿" if _schedule else "📤 WordPress に投稿する"
+            if st.button(_btn_label, type="primary", key="wp_publish_btn", use_container_width=True):
                 with st.spinner("投稿中... 画像をアップロードしています"):
                     try:
-                        _result = publish_article(_wp_site, raw_title, md_str, _wp_rest_base, _wp_status,
-                                                  use_blocks=_wp_use_blocks)
-                        _label = {v: k for k, v in _status_map.items()}.get(_result["status"], _result["status"])
-                        st.success(f"投稿しました！（{_label}）", icon="✅")
+                        _result = publish_article(
+                            _wp_site, raw_title, md_str, _wp_rest_base, _wp_status,
+                            use_blocks=_wp_use_blocks,
+                            scheduled_at=_scheduled_at,
+                        )
+                        if _scheduled_at:
+                            st.success(f"予約投稿しました！（{_sched_date.strftime('%Y年%m月%d日')} {_sched_time.strftime('%H:%M')}）", icon="📅")
+                        else:
+                            _label = {v: k for k, v in _status_map.items()}.get(_result["status"], _result["status"])
+                            st.success(f"投稿しました！（{_label}）", icon="✅")
                         if _result["link"]:
                             st.markdown(f"[投稿を確認する →]({_result['link']})")
                     except Exception as _e:
