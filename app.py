@@ -214,7 +214,6 @@ with st.sidebar:
             else:
                 st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
 
-        st.caption("モデルを追加")
         if not use_openai_text:
             st.caption("モデルを追加")
             already = set(list_ollama_models()) if ollama_ok else set()
