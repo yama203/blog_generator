@@ -237,15 +237,30 @@ with st.sidebar:
                 else:
                     with st.spinner("確認中..."):
                         from core.dalle_generator import detect_available_model, OPENAI_IMAGE_MODELS
-                        found = detect_available_model(openai_api_key)
-                        if found:
-                            st.success(f"✅ 接続OK（画像モデル: `{found}`）")
-                        else:
-                            st.error(
-                                f"❌ 画像生成モデルが見つかりません。\n\n"
-                                f"確認済みモデル: {', '.join(OPENAI_IMAGE_MODELS)}\n\n"
-                                "OpenAI アカウントで画像生成が有効か確認してください。"
-                            )
+                        from core.text_generator import OPENAI_TEXT_MODEL, _generate_openai
+                        # テキストモデル確認
+                        try:
+                            _generate_openai("ping", openai_api_key)
+                            text_ok = True
+                        except Exception:
+                            text_ok = False
+                        # 画像モデル確認
+                        img_model = detect_available_model(openai_api_key)
+
+                    if text_ok and img_model:
+                        st.success(
+                            f"✅ 接続OK\n\n"
+                            f"- テキスト: `{OPENAI_TEXT_MODEL}`\n"
+                            f"- 画像: `{img_model}`"
+                        )
+                    elif text_ok:
+                        st.warning(
+                            f"⚠️ テキスト生成は利用可能（`{OPENAI_TEXT_MODEL}`）ですが、"
+                            f"画像生成モデルが見つかりません。\n\n"
+                            f"確認済みモデル: {', '.join(OPENAI_IMAGE_MODELS)}"
+                        )
+                    else:
+                        st.error("❌ 接続できませんでした。APIキーを確認してください。")
 
             if _saved_key:
                 st.caption("✅ 保存済み")
