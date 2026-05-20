@@ -172,6 +172,14 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+# APIキーが保存済みならテキスト生成のデフォルトをOpenAIにする（初回のみ）
+if "text_engine_radio" not in st.session_state:
+    import os as _os_init
+    _has_api_key = bool(load_openai_key() or _os_init.environ.get("OPENAI_API_KEY", ""))
+    st.session_state["text_engine_radio"] = (
+        "OpenAI (GPT-4o-mini)" if _has_api_key else "Ollama（ローカル）"
+    )
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ 設定")
