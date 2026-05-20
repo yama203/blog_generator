@@ -449,6 +449,7 @@ with st.sidebar:
         st.session_state["img_regen_target"] = _new_secs[0] if _new_secs else None
         st.session_state.pop("wp_dialog_open", None)
         st.session_state.pop("img_regen_prompt", None)
+        st.session_state["scroll_to_top"] = True
 
     def _render_article_row(art: dict, key_suffix: str = "") -> None:
         _date_str = art["created"][:10] if art["created"] else ""
@@ -772,6 +773,9 @@ if st.session_state.ui_mode == "create":
 # EDIT MODE
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
+
+    if st.session_state.pop("scroll_to_top", False):
+        st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0, 0);</script>", height=0)
 
     raw_title = st.session_state.result_title or "blog_post"
     saved_keywords = st.session_state.result_keywords
