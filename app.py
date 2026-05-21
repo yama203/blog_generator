@@ -340,7 +340,7 @@ with st.sidebar:
                 "品質",
                 options=["標準", "高品質"],
                 value="標準",
-                help="標準: 約0.04ドル/枚 / 高品質(HD): 約0.08ドル/枚",
+                help="標準: 約6円/枚 / 高品質(HD): 約12円/枚",
             )
 
     # ── WordPress sites ────────────────────────────────────────────────────────
@@ -914,7 +914,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                         options=["標準", "高品質"],
                         horizontal=True,
                         key="img_regen_quality",
-                        captions=["約0.04ドル/枚", "約0.08ドル/枚"],
+                        captions=["約6円/枚", "約12円/枚"],
                     )
 
                     if st.button("🔄 画像を再生成", key="img_regen_btn", type="secondary"):
