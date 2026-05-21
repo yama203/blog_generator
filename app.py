@@ -1341,5 +1341,12 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.success("公開しました！", icon="✅")
                         else:
                             st.success("下書きとして保存しました！", icon="✅")
+                        if _sh_result.get("images_removed", 0) > 0:
+                            st.warning(
+                                f"⚠️ 画像 {_sh_result['images_removed']} 枚は投稿から除外されました。\n\n"
+                                "Shopify の制限により、AI生成画像（Data URI）はAPI経由では添付できません。\n"
+                                "Shopify 管理画面 > コンテンツ > ファイル に画像をアップロードし、\n"
+                                "記事編集画面で画像を手動で挿入してください。",
+                            )
                     except Exception as _e:
                         st.error(f"投稿に失敗しました: {_e}")

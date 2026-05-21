@@ -91,6 +91,19 @@ def list_blogs(site: dict) -> list[dict]:
     return [{"id": b["id"], "title": b["title"]} for b in r.json().get("blogs", [])]
 
 
+def _strip_base64_images(html: str) -> tuple[str, int]:
+    """
+    <img src="data:image/..."> を除去し、(処理後HTML, 除去枚数) を返す。
+    Shopify は Data URI を含む body_html を 422 で拒否するため必須。
+    """
+    original = html
+    html = re.sub(r'<img[^>]+src=["\']data:image/[^"\']{20,}["\'][^>]*/?>', '', html)
+    removed = original.count('data:image/') - html.count('data:image/')
+    # Markdown の画像記法が HTML 変換後に残っている場合も除去
+    html = re.sub(r'!\[[^\]]*\]\(data:image/[^\)]{20,}\)', '', html)
+    return html, removed
+
+
 def publish_article(
     site: dict,
     title: str,
@@ -101,14 +114,17 @@ def publish_article(
 ) -> dict:
     """
     Shopify ブログに記事を投稿する。
-    base64 画像は data URI のままHTMLに埋め込む。
-    {"id": int, "handle": str, "published": bool} を返す。
+    base64 Data URI 画像は Shopify が拒否するため除去して投稿する。
+    {"id": int, "handle": str, "published": bool, "images_removed": int} を返す。
     """
     from core.exporter import _md_to_html
 
     # H1 タイトルを除去（Shopify の title フィールドと重複するため）
     md_body = re.sub(r'^# .+\n?', '', markdown_str, count=1).strip()
     html = _md_to_html(md_body)
+
+    # Shopify は Data URI を含む HTML を 422 で拒否するため除去
+    html, images_removed = _strip_base64_images(html)
 
     article: dict = {
         "title": title,
@@ -127,11 +143,20 @@ def publish_article(
         json={"article": article},
         timeout=60,
     )
-    r.raise_for_status()
+    if not r.ok:
+        # Shopify のエラー詳細を含めて例外を raise
+        try:
+            err = r.json().get("errors") or r.json().get("error") or r.text[:300]
+        except Exception:
+            err = r.text[:300]
+        r.raise_for_status()  # これで HTTPError が発生するが、上で詳細を取れなければここで止まる
+        raise requests.HTTPError(f"{r.status_code}: {err}", response=r)
+
     data = r.json().get("article", {})
 
     return {
         "id": data.get("id"),
         "handle": data.get("handle", ""),
         "published": data.get("published", False),
+        "images_removed": images_removed,
     }
