@@ -113,8 +113,16 @@ from core.config import (
     list_wordpress_sites,
     save_wordpress_site,
     delete_wordpress_site,
+    list_shopify_sites,
+    save_shopify_site,
+    delete_shopify_site,
 )
 from core.wordpress_client import get_post_types, publish_article, test_connection
+from core.shopify_client import (
+    list_blogs as shopify_list_blogs,
+    publish_article as shopify_publish_article,
+    test_connection as shopify_test_connection,
+)
 from core.updater import (
     download_and_apply,
     get_current_version,
@@ -435,6 +443,97 @@ with st.sidebar:
     if st.session_state.get("wp_dialog_open"):
         st.session_state.wp_dialog_open = False  # 次のrerunでは自動的に閉じる
         _wp_settings_dialog()
+
+    # ── Shopify sites ──────────────────────────────────────────────────────────
+    @st.dialog("🛍️ Shopify 設定", width="large")
+    def _shopify_settings_dialog() -> None:
+        _sites = list_shopify_sites()
+        _editing = st.session_state.get("shopify_editing")
+
+        if _sites:
+            st.caption("登録済みストア")
+            for _ss in _sites:
+                _sc1, _sc2, _sc3 = st.columns([4, 1, 1])
+                with _sc1:
+                    st.caption(f"**{_ss['name']}**  \n{_ss['store']}")
+                with _sc2:
+                    if st.button("✏️", key=f"shopify_edit_{_ss['name']}", help="編集",
+                                 use_container_width=True):
+                        st.session_state.shopify_editing = _ss["name"]
+                        st.session_state.shopify_dialog_open = True
+                        st.rerun()
+                with _sc3:
+                    if st.button("🗑️", key=f"shopify_del_{_ss['name']}", help="削除",
+                                 use_container_width=True):
+                        delete_shopify_site(_ss["name"])
+                        if _editing == _ss["name"]:
+                            st.session_state.pop("shopify_editing", None)
+                        st.session_state.shopify_dialog_open = True
+                        st.rerun()
+
+            if _editing and any(s["name"] == _editing for s in _sites):
+                _site_data = next(s for s in _sites if s["name"] == _editing)
+                st.divider()
+                st.caption(f"「{_editing}」を編集")
+                _e_store = st.text_input("ストアURL", value=_site_data["store"], key="shopify_e_store")
+                _e_token = st.text_input(
+                    "アクセストークン", type="password",
+                    value=_site_data["access_token"], key="shopify_e_token",
+                    help="Shopify 管理画面 > アプリ管理 > カスタムアプリ で発行。",
+                )
+                _es1, _es2 = st.columns(2)
+                with _es1:
+                    if st.button("💾 保存", key="shopify_e_save", use_container_width=True, type="primary"):
+                        if _e_store and _e_token:
+                            save_shopify_site({
+                                "name": _editing, "store": _e_store,
+                                "access_token": _e_token,
+                            })
+                            st.session_state.pop("shopify_editing", None)
+                            st.session_state.shopify_dialog_open = True
+                            st.rerun()
+                        else:
+                            st.warning("すべての項目を入力してください")
+                with _es2:
+                    if st.button("キャンセル", key="shopify_e_cancel", use_container_width=True):
+                        st.session_state.pop("shopify_editing", None)
+                        st.session_state.shopify_dialog_open = True
+                        st.rerun()
+
+        st.divider()
+        st.caption("ストアを追加")
+        _add_gen = st.session_state.get("shopify_add_gen", 0)
+        _sh_name  = st.text_input("ストア名", placeholder="メインストア", key=f"shopify_add_name_{_add_gen}")
+        _sh_store = st.text_input(
+            "ストアURL", placeholder="mystore.myshopify.com",
+            key=f"shopify_add_store_{_add_gen}",
+            help="カスタムドメインでも可。例: shop.example.com",
+        )
+        _sh_token = st.text_input(
+            "Admin API アクセストークン", type="password",
+            placeholder="shpat_...",
+            key=f"shopify_add_token_{_add_gen}",
+            help="Shopify 管理画面 > アプリ管理 > アプリを開発 > カスタムアプリを作成 → `write_content` スコープを付与して発行。",
+        )
+        if st.button("追加", key="shopify_add_btn", use_container_width=True):
+            if _sh_name and _sh_store and _sh_token:
+                save_shopify_site({
+                    "name": _sh_name, "store": _sh_store,
+                    "access_token": _sh_token,
+                })
+                st.session_state.shopify_add_gen = _add_gen + 1
+                st.session_state.shopify_dialog_open = True
+                st.rerun()
+            else:
+                st.warning("すべての項目を入力してください")
+
+    if st.button("🛍️ Shopify 設定", use_container_width=True, key="shopify_settings_btn"):
+        st.session_state.pop("shopify_editing", None)
+        st.session_state.shopify_dialog_open = True
+
+    if st.session_state.get("shopify_dialog_open"):
+        st.session_state.shopify_dialog_open = False
+        _shopify_settings_dialog()
 
     # ── Saved articles ─────────────────────────────────────────────────────────
     st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
@@ -1123,5 +1222,124 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.success(f"投稿しました！（{_label}）", icon="✅")
                         if _result["link"]:
                             st.markdown(f"[投稿を確認する →]({_result['link']})")
+                    except Exception as _e:
+                        st.error(f"投稿に失敗しました: {_e}")
+
+    # ── Shopify 投稿 ───────────────────────────────────────────────────────────
+    import datetime as _dt2
+    _shopify_exp_open = any(k in st.session_state for k in (
+        "shopify_site_select", "shopify_status_select", "shopify_blog_select",
+        "shopify_schedule_toggle",
+    ))
+    with st.expander("🛍️ Shopify に投稿", expanded=_shopify_exp_open):
+        _shopify_sites = list_shopify_sites()
+        if not _shopify_sites:
+            st.info("サイドバーの「Shopify 設定」からストアを登録してください。", icon="ℹ️")
+        else:
+            _sh_site_names = [s["name"] for s in _shopify_sites]
+            _sh_sel_col, _sh_test_col = st.columns([4, 1])
+            with _sh_sel_col:
+                _sh_selected_name = st.selectbox(
+                    "投稿先ストア", _sh_site_names, key="shopify_site_select",
+                    label_visibility="collapsed",
+                )
+            _sh_site = next(s for s in _shopify_sites if s["name"] == _sh_selected_name)
+            with _sh_test_col:
+                if st.button("接続テスト", key="shopify_test_btn", use_container_width=True):
+                    with st.spinner("確認中..."):
+                        _sh_ok, _sh_msg = shopify_test_connection(_sh_site)
+                        (st.success if _sh_ok else st.error)(_sh_msg, icon="✅" if _sh_ok else "❌")
+
+            # ブログ一覧
+            _sh_blogs_key = f"shopify_blogs_{_sh_selected_name}"
+            if _sh_blogs_key not in st.session_state:
+                st.session_state[_sh_blogs_key] = []
+
+            _sh_blog_col, _sh_fetch_col = st.columns([4, 1])
+            with _sh_fetch_col:
+                st.markdown('<div style="height:1.7rem"></div>', unsafe_allow_html=True)
+                if st.button("取得", key="shopify_fetch_blogs", use_container_width=True,
+                             help="ストアのブログ一覧を取得します"):
+                    with st.spinner("取得中..."):
+                        try:
+                            st.session_state[_sh_blogs_key] = shopify_list_blogs(_sh_site)
+                        except Exception as _e:
+                            st.error(f"取得失敗: {_e}")
+
+            _sh_blog_list = st.session_state[_sh_blogs_key]
+            with _sh_blog_col:
+                if _sh_blog_list:
+                    _sh_blog_id = st.selectbox(
+                        "ブログ",
+                        options=[b["id"] for b in _sh_blog_list],
+                        format_func=lambda bid: next(
+                            (b["title"] for b in _sh_blog_list if b["id"] == bid), str(bid)
+                        ),
+                        key="shopify_blog_select",
+                    )
+                else:
+                    st.info("「取得」ボタンでブログ一覧を読み込んでください。", icon="ℹ️")
+                    _sh_blog_id = None
+
+            _sh_status_map = {"下書き": False, "公開": True}
+            _sh_published = _sh_status_map[st.selectbox(
+                "ステータス", list(_sh_status_map.keys()), key="shopify_status_select"
+            )]
+
+            # 予約投稿
+            _sh_schedule = st.toggle("🕐 予約投稿", key="shopify_schedule_toggle")
+            _sh_scheduled_at = ""
+            if _sh_schedule:
+                _sh_sched_col1, _sh_sched_col2 = st.columns(2)
+                with _sh_sched_col1:
+                    _sh_sched_date = st.date_input(
+                        "公開日",
+                        value=_dt2.date.today() + _dt2.timedelta(days=1),
+                        min_value=_dt2.date.today(),
+                        key="shopify_sched_date",
+                        label_visibility="visible",
+                    )
+                with _sh_sched_col2:
+                    _sh_sched_time = st.time_input(
+                        "公開時刻",
+                        value=_dt2.time(9, 0),
+                        key="shopify_sched_time",
+                        step=300,
+                        label_visibility="visible",
+                    )
+                _sh_scheduled_at = _dt2.datetime.combine(
+                    _sh_sched_date, _sh_sched_time
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+                st.caption(
+                    f"予約日時: {_sh_sched_date.strftime('%Y年%m月%d日')} "
+                    f"{_sh_sched_time.strftime('%H:%M')}（ストアのタイムゾーン）"
+                )
+
+            _sh_btn_label = (
+                f"📅 {_dt2.datetime.combine(_sh_sched_date, _sh_sched_time).strftime('%m/%d %H:%M')} に予約投稿"
+                if _sh_schedule
+                else "📤 Shopify に投稿する"
+            )
+            if st.button(
+                _sh_btn_label, type="primary", key="shopify_publish_btn",
+                use_container_width=True, disabled=_sh_blog_id is None,
+            ):
+                with st.spinner("投稿中..."):
+                    try:
+                        _sh_result = shopify_publish_article(
+                            _sh_site, raw_title, md_str, _sh_blog_id,
+                            published=_sh_published,
+                            scheduled_at=_sh_scheduled_at,
+                        )
+                        if _sh_scheduled_at:
+                            st.success(
+                                f"予約投稿しました！（{_sh_sched_date.strftime('%Y年%m月%d日')} "
+                                f"{_sh_sched_time.strftime('%H:%M')}）",
+                                icon="📅",
+                            )
+                        elif _sh_published:
+                            st.success("公開しました！", icon="✅")
+                        else:
+                            st.success("下書きとして保存しました！", icon="✅")
                     except Exception as _e:
                         st.error(f"投稿に失敗しました: {_e}")

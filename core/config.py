@@ -59,3 +59,30 @@ def delete_wordpress_site(name: str) -> None:
     data = _load()
     data["wordpress_sites"] = [s for s in data.get("wordpress_sites", []) if s.get("name") != name]
     _save(data)
+
+
+# ── Shopify sites ──────────────────────────────────────────────────────────────
+
+def list_shopify_sites() -> list[dict]:
+    return _load().get("shopify_sites", [])
+
+
+def save_shopify_site(site: dict) -> None:
+    """Add or update a site entry (matched by name)."""
+    data = _load()
+    sites = data.get("shopify_sites", [])
+    for i, s in enumerate(sites):
+        if s.get("name") == site["name"]:
+            sites[i] = site
+            data["shopify_sites"] = sites
+            _save(data)
+            return
+    sites.append(site)
+    data["shopify_sites"] = sites
+    _save(data)
+
+
+def delete_shopify_site(name: str) -> None:
+    data = _load()
+    data["shopify_sites"] = [s for s in data.get("shopify_sites", []) if s.get("name") != name]
+    _save(data)
