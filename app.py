@@ -644,7 +644,7 @@ if st.session_state.ui_mode == "create":
                         )
                     )
                 with _img_col:
-                    st.write("")
+                    st.markdown('<div style="height:1.9rem"></div>', unsafe_allow_html=True)
                     _gen = st.checkbox("画像を生成", value=False, key=f"section_gen_img_{_i}")
             else:
                 user_sections.append(
