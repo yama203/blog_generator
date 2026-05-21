@@ -479,7 +479,12 @@ with st.sidebar:
                 _e_token = st.text_input(
                     "アクセストークン", type="password",
                     value=_site_data["access_token"], key="shopify_e_token",
-                    help="Shopify 管理画面 > アプリ管理 > カスタムアプリ で発行。",
+                    help=(
+                        "Shopify 管理画面 > アプリ管理 > アプリを開発 > カスタムアプリを作成\n"
+                        "→ Admin API スコープで write_content（必須）と write_files（画像アップロード時）を付与\n"
+                        "→ 「APIの認証情報」タブ > 「トークンを表示」でコピー\n"
+                        "※ スコープ変更後はトークンを再発行してください"
+                    ),
                 )
                 _es1, _es2 = st.columns(2)
                 with _es1:
@@ -502,18 +507,40 @@ with st.sidebar:
 
         st.divider()
         st.caption("ストアを追加")
+
+        with st.expander("🔑 アクセストークンの取得方法"):
+            st.markdown(
+                "**Shopify 管理画面でカスタムアプリを作成してトークンを発行します。**\n\n"
+                "1. Shopify 管理画面にログイン\n"
+                "2. 左メニュー **「アプリ管理」→「アプリを開発」**\n"
+                "3. **「カスタムアプリを作成」** → アプリ名を入力（例: AIブログジェネレーター）\n"
+                "4. **「Admin API スコープを設定する」** をクリック\n"
+                "5. 以下のスコープにチェックを入れて **「保存」**\n"
+                "   - `write_content`（ブログ記事の投稿・編集）\n"
+                "   - `write_files`（画像を CDN にアップロードする場合）\n"
+                "6. **「APIの認証情報」タブ** を開く\n"
+                "7. **「Admin API アクセストークン」→「トークンを表示」** をクリック\n"
+                "8. `shpat_` から始まるトークンをコピーして下に貼り付け\n\n"
+                "⚠️ トークンは**発行直後の1回しか表示されません**。必ずコピーしてください。"
+            )
+
         _add_gen = st.session_state.get("shopify_add_gen", 0)
         _sh_name  = st.text_input("ストア名", placeholder="メインストア", key=f"shopify_add_name_{_add_gen}")
         _sh_store = st.text_input(
             "ストアURL", placeholder="mystore.myshopify.com",
             key=f"shopify_add_store_{_add_gen}",
-            help="カスタムドメインでも可。例: shop.example.com",
+            help="myshopify.com ドメインまたはカスタムドメイン。例: mystore.myshopify.com / shop.example.com",
         )
         _sh_token = st.text_input(
             "Admin API アクセストークン", type="password",
-            placeholder="shpat_...",
+            placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
             key=f"shopify_add_token_{_add_gen}",
-            help="Shopify 管理画面 > アプリ管理 > アプリを開発 > カスタムアプリを作成 → `write_content` スコープを付与して発行。",
+            help=(
+                "Shopify 管理画面 > アプリ管理 > アプリを開発 > カスタムアプリを作成\n"
+                "→ Admin API スコープで write_content（必須）と write_files（画像アップロード時）を付与\n"
+                "→ 「APIの認証情報」タブ > 「トークンを表示」でコピー\n"
+                "※ トークンは発行時の1回しか表示されません"
+            ),
         )
         if st.button("追加", key="shopify_add_btn", use_container_width=True):
             if _sh_name and _sh_store and _sh_token:
