@@ -1315,6 +1315,22 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                     f"{_sh_sched_time.strftime('%H:%M')}（ストアのタイムゾーン）"
                 )
 
+            # 画像アップロードオプション
+            _sh_img_count = len(re.findall(r'data:image/', md_str))
+            _sh_upload_images = False
+            if _sh_img_count > 0:
+                _sh_upload_images = st.toggle(
+                    f"🖼️ 画像を Shopify CDN にアップロードする（{_sh_img_count} 枚）",
+                    key="shopify_upload_images",
+                    help=(
+                        "ON: Staged Uploads API で画像を Shopify CDN にアップロードして本文に埋め込みます。\n"
+                        "カスタムアプリに `write_files` スコープが必要です。\n\n"
+                        "OFF: 画像なしで投稿します（本文テキストのみ）。"
+                    ),
+                )
+                if _sh_upload_images:
+                    st.caption("⚠️ 画像1枚あたり数秒かかります。カスタムアプリに `write_files` スコープが必要です。")
+
             _sh_btn_label = (
                 f"📅 {_dt2.datetime.combine(_sh_sched_date, _sh_sched_time).strftime('%m/%d %H:%M')} に予約投稿"
                 if _sh_schedule
@@ -1324,13 +1340,27 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 _sh_btn_label, type="primary", key="shopify_publish_btn",
                 use_container_width=True, disabled=_sh_blog_id is None,
             ):
+                _sh_status_placeholder = st.empty()
+                _sh_progress = st.progress(0.0) if (_sh_upload_images and _sh_img_count > 0) else None
+
+                def _sh_progress_cb(current, total, filename):
+                    if _sh_progress:
+                        _sh_progress.progress(current / total)
+                    _sh_status_placeholder.caption(f"画像をアップロード中... ({current}/{total}) {filename}")
+
                 with st.spinner("投稿中..."):
                     try:
                         _sh_result = shopify_publish_article(
                             _sh_site, raw_title, md_str, _sh_blog_id,
                             published=_sh_published,
                             scheduled_at=_sh_scheduled_at,
+                            upload_images=_sh_upload_images,
+                            progress_cb=_sh_progress_cb if _sh_upload_images else None,
                         )
+                        _sh_status_placeholder.empty()
+                        if _sh_progress:
+                            _sh_progress.empty()
+
                         if _sh_scheduled_at:
                             st.success(
                                 f"予約投稿しました！（{_sh_sched_date.strftime('%Y年%m月%d日')} "
@@ -1341,12 +1371,19 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                             st.success("公開しました！", icon="✅")
                         else:
                             st.success("下書きとして保存しました！", icon="✅")
+
+                        if _sh_result.get("images_uploaded", 0) > 0:
+                            st.info(f"🖼️ 画像 {_sh_result['images_uploaded']} 枚を Shopify CDN にアップロードしました。")
+                        if _sh_result.get("images_failed", 0) > 0:
+                            st.warning(f"⚠️ 画像 {_sh_result['images_failed']} 枚のアップロードに失敗しました。")
                         if _sh_result.get("images_removed", 0) > 0:
                             st.warning(
                                 f"⚠️ 画像 {_sh_result['images_removed']} 枚は投稿から除外されました。\n\n"
-                                "Shopify の制限により、AI生成画像（Data URI）はAPI経由では添付できません。\n"
-                                "Shopify 管理画面 > コンテンツ > ファイル に画像をアップロードし、\n"
-                                "記事編集画面で画像を手動で挿入してください。",
+                                "「画像を Shopify CDN にアップロードする」をONにするか、\n"
+                                "Shopify 管理画面 > コンテンツ > ファイル から手動アップロードしてください。",
                             )
                     except Exception as _e:
+                        _sh_status_placeholder.empty()
+                        if _sh_progress:
+                            _sh_progress.empty()
                         st.error(f"投稿に失敗しました: {_e}")

@@ -1,4 +1,6 @@
+import base64 as _b64
 import re
+import time
 
 import requests
 
@@ -11,6 +13,13 @@ def _base_url(site: dict) -> str:
     if not store.startswith(("http://", "https://")):
         store = "https://" + store
     return f"{store}/admin/api/{_API_VERSION}"
+
+
+def _graphql_url(site: dict) -> str:
+    store = site["store"].strip().rstrip("/")
+    if not store.startswith(("http://", "https://")):
+        store = "https://" + store
+    return f"{store}/admin/api/{_API_VERSION}/graphql.json"
 
 
 def _headers(site: dict) -> dict:
@@ -35,6 +44,20 @@ def _body_hint(r: requests.Response) -> str:
         return f"サーバーレスポンス（先頭）: {text[:200]}"
     except Exception:
         return ""
+
+
+def _graphql(site: dict, query: str, variables: dict | None = None) -> dict:
+    r = requests.post(
+        _graphql_url(site),
+        headers={
+            "X-Shopify-Access-Token": site["access_token"].strip(),
+            "Content-Type": "application/json",
+        },
+        json={"query": query, "variables": variables or {}},
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
 
 
 def test_connection(site: dict) -> tuple[bool, str]:
@@ -91,18 +114,182 @@ def list_blogs(site: dict) -> list[dict]:
     return [{"id": b["id"], "title": b["title"]} for b in r.json().get("blogs", [])]
 
 
-def _strip_base64_images(html: str) -> tuple[str, int]:
-    """
-    <img src="data:image/..."> を除去し、(処理後HTML, 除去枚数) を返す。
-    Shopify は Data URI を含む body_html を 422 で拒否するため必須。
-    """
-    original = html
-    html = re.sub(r'<img[^>]+src=["\']data:image/[^"\']{20,}["\'][^>]*/?>', '', html)
-    removed = original.count('data:image/') - html.count('data:image/')
-    # Markdown の画像記法が HTML 変換後に残っている場合も除去
-    html = re.sub(r'!\[[^\]]*\]\(data:image/[^\)]{20,}\)', '', html)
-    return html, removed
+# ── 画像アップロード（Staged Uploads + Files API） ────────────────────────────
 
+def _upload_image_to_cdn(
+    site: dict,
+    image_bytes: bytes,
+    filename: str,
+    mime_type: str,
+) -> str | None:
+    """
+    Shopify の Staged Uploads → Files API を使って画像を CDN にアップロードし、
+    CDN URL を返す。失敗時は None。
+
+    必要スコープ: write_files（カスタムアプリに追加が必要）
+    """
+    # Step 1: staged upload URL を取得
+    staged_result = _graphql(site, """
+    mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+      stagedUploadsCreate(input: $input) {
+        stagedTargets {
+          url
+          resourceUrl
+          parameters { name value }
+        }
+        userErrors { field message }
+      }
+    }
+    """, {"input": [{
+        "filename": filename,
+        "mimeType": mime_type,
+        "resource": "FILE",
+        "fileSize": str(len(image_bytes)),
+        "httpMethod": "POST",
+    }]})
+
+    errors = staged_result.get("data", {}).get("stagedUploadsCreate", {}).get("userErrors", [])
+    if errors:
+        raise ValueError(f"Staged upload エラー: {errors}")
+
+    targets = staged_result.get("data", {}).get("stagedUploadsCreate", {}).get("stagedTargets", [])
+    if not targets:
+        return None
+
+    target = targets[0]
+    params = {p["name"]: p["value"] for p in target["parameters"]}
+
+    # Step 2: S3 / GCS にアップロード（params を先、file を最後に）
+    upload_r = requests.post(
+        target["url"],
+        data=params,
+        files={"file": (filename, image_bytes, mime_type)},
+        timeout=120,
+    )
+    upload_r.raise_for_status()
+
+    # Step 3: Files API で Shopify に登録
+    file_result = _graphql(site, """
+    mutation fileCreate($files: [FileCreateInput!]!) {
+      fileCreate(files: $files) {
+        files {
+          ... on MediaImage {
+            id
+            image { url }
+          }
+          ... on GenericFile {
+            id
+            url
+          }
+        }
+        userErrors { field message }
+      }
+    }
+    """, {"files": [{
+        "originalSource": target["resourceUrl"],
+        "filename": filename,
+        "contentType": "IMAGE",
+    }]})
+
+    file_errors = file_result.get("data", {}).get("fileCreate", {}).get("userErrors", [])
+    if file_errors:
+        raise ValueError(f"fileCreate エラー: {file_errors}")
+
+    # Step 4: CDN URL をポーリング（非同期処理のため最大 20 秒待機）
+    for attempt in range(7):
+        files_data = file_result.get("data", {}).get("fileCreate", {}).get("files", [])
+        if files_data:
+            f = files_data[0]
+            cdn_url = (f.get("image") or {}).get("url") or f.get("url")
+            if cdn_url:
+                return cdn_url
+
+        if attempt < 6:
+            time.sleep(3)
+            # files クエリで再取得
+            poll_result = _graphql(site, """
+            query($q: String!) {
+              files(first: 1, query: $q) {
+                edges {
+                  node {
+                    ... on MediaImage { image { url } }
+                    ... on GenericFile { url }
+                  }
+                }
+              }
+            }
+            """, {"q": f"filename:{filename}"})
+            edges = poll_result.get("data", {}).get("files", {}).get("edges", [])
+            if edges:
+                node = edges[0]["node"]
+                cdn_url = (node.get("image") or {}).get("url") or node.get("url")
+                if cdn_url:
+                    return cdn_url
+            # file_result を更新して次のループへ
+            file_result = {"data": {"fileCreate": {"files": [], "userErrors": []}}}
+
+    return None
+
+
+def _replace_base64_with_cdn(
+    html: str,
+    markdown_str: str,
+    site: dict,
+    progress_cb=None,
+) -> tuple[str, int, int]:
+    """
+    HTML / Markdown 内の base64 Data URI 画像を Shopify CDN URL に差し替える。
+    progress_cb(current, total, filename) で進捗通知。
+    (処理後HTML, 成功枚数, 失敗枚数) を返す。
+    """
+    # Markdown から base64 画像を抽出（alt, ext, b64data）
+    pattern = re.compile(
+        r'!\[([^\]]*)\]\(data:image/(\w+);base64,([A-Za-z0-9+/=\n]+)\)',
+        re.DOTALL,
+    )
+    matches = pattern.findall(markdown_str)
+    total = len(matches)
+    succeeded = 0
+    failed = 0
+
+    for i, (alt, ext, b64data) in enumerate(matches):
+        filename = f"blog_image_{i+1:02d}.{ext}"
+        mime_type = f"image/{ext}"
+        if progress_cb:
+            progress_cb(i + 1, total, filename)
+        try:
+            img_bytes = _b64.b64decode(b64data.replace("\n", ""))
+            cdn_url = _upload_image_to_cdn(site, img_bytes, filename, mime_type)
+            if cdn_url:
+                # HTML 内の対応する <img> タグを CDN URL に差し替え
+                # src="data:image/ext;base64,..." の部分を探して置換
+                b64_prefix = b64data[:30].replace("\n", "")
+                html = re.sub(
+                    rf'src=["\']data:image/{re.escape(ext)};base64,{re.escape(b64_prefix)}[^"\']*["\']',
+                    f'src="{cdn_url}"',
+                    html,
+                    count=1,
+                )
+                succeeded += 1
+            else:
+                # URL 取得失敗 → img タグを除去
+                html = re.sub(
+                    rf'<img[^>]*src=["\']data:image/{re.escape(ext)};base64,{re.escape(b64_prefix)}[^"\']*["\'][^>]*/?>',
+                    '',
+                    html,
+                    count=1,
+                )
+                failed += 1
+        except Exception:
+            failed += 1
+
+    # 残った Data URI を念のため除去
+    html = re.sub(r'<img[^>]+src=["\']data:image/[^"\']{20,}["\'][^>]*/?>', '', html)
+
+    return html, succeeded, failed
+
+
+# ── 記事投稿 ─────────────────────────────────────────────────────────────────
 
 def publish_article(
     site: dict,
@@ -111,20 +298,36 @@ def publish_article(
     blog_id: int,
     published: bool = False,
     scheduled_at: str = "",
+    upload_images: bool = False,
+    progress_cb=None,
 ) -> dict:
     """
     Shopify ブログに記事を投稿する。
-    base64 Data URI 画像は Shopify が拒否するため除去して投稿する。
-    {"id": int, "handle": str, "published": bool, "images_removed": int} を返す。
+    upload_images=True のとき Staged Uploads で画像を CDN にアップロードする
+    （カスタムアプリに write_files スコープが必要）。
+    {"id": int, "handle": str, "published": bool,
+     "images_uploaded": int, "images_failed": int, "images_removed": int} を返す。
     """
     from core.exporter import _md_to_html
 
-    # H1 タイトルを除去（Shopify の title フィールドと重複するため）
+    # H1 タイトルを除去
     md_body = re.sub(r'^# .+\n?', '', markdown_str, count=1).strip()
     html = _md_to_html(md_body)
 
-    # Shopify は Data URI を含む HTML を 422 で拒否するため除去
-    html, images_removed = _strip_base64_images(html)
+    images_uploaded = 0
+    images_failed = 0
+    images_removed = 0
+
+    if upload_images:
+        html, images_uploaded, images_failed = _replace_base64_with_cdn(
+            html, markdown_str, site, progress_cb=progress_cb
+        )
+    else:
+        # Data URI を除去（422 回避）
+        before = html.count('data:image/')
+        html = re.sub(r'<img[^>]+src=["\']data:image/[^"\']{20,}["\'][^>]*/?>', '', html)
+        html = re.sub(r'!\[[^\]]*\]\(data:image/[^\)]{20,}\)', '', html)
+        images_removed = before - html.count('data:image/')
 
     article: dict = {
         "title": title,
@@ -133,7 +336,6 @@ def publish_article(
     }
 
     if scheduled_at:
-        # 予約投稿: published=false + published_at に未来日時
         article["published"] = False
         article["published_at"] = scheduled_at
 
@@ -144,12 +346,10 @@ def publish_article(
         timeout=60,
     )
     if not r.ok:
-        # Shopify のエラー詳細を含めて例外を raise
         try:
             err = r.json().get("errors") or r.json().get("error") or r.text[:300]
         except Exception:
             err = r.text[:300]
-        r.raise_for_status()  # これで HTTPError が発生するが、上で詳細を取れなければここで止まる
         raise requests.HTTPError(f"{r.status_code}: {err}", response=r)
 
     data = r.json().get("article", {})
@@ -158,5 +358,7 @@ def publish_article(
         "id": data.get("id"),
         "handle": data.get("handle", ""),
         "published": data.get("published", False),
+        "images_uploaded": images_uploaded,
+        "images_failed": images_failed,
         "images_removed": images_removed,
     }
