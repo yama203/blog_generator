@@ -168,10 +168,14 @@ for key, default in [
     ("update_checked", False),
     ("update_check_result", None),
     ("save_success", False),
-    ("wp_editor_format", "ブロック（Gutenberg）"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# エディタ形式のデフォルトをブロックに固定（クラシックが残っていたら上書き）
+if st.session_state.get("wp_editor_format") != "ブロック（Gutenberg）" and \
+        not st.session_state.get("_wp_format_user_set"):
+    st.session_state["wp_editor_format"] = "ブロック（Gutenberg）"
 
 # APIキーが保存済みならテキスト生成のデフォルトをOpenAIにする（初回のみ）
 if "text_engine_radio" not in st.session_state:
@@ -1012,7 +1016,7 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
     # 内側のウィジェットが一度でも操作されていたらアコーディオンを開いたままにする
     _wp_exp_open = any(k in st.session_state for k in (
         "wp_site_select", "wp_status_select", "wp_post_type_select",
-        "wp_schedule_toggle", "wp_editor_format",
+        "wp_schedule_toggle",
     ))
     with st.expander("🌐 WordPress に投稿", expanded=_wp_exp_open):
         _wp_sites = list_wordpress_sites()
@@ -1090,12 +1094,14 @@ elif st.session_state.ui_mode == "edit" and st.session_state.result_markdown:
                 _scheduled_at = _dt.datetime.combine(_sched_date, _sched_time).strftime("%Y-%m-%dT%H:%M:%S")
                 st.caption(f"予約日時: {_sched_date.strftime('%Y年%m月%d日')} {_sched_time.strftime('%H:%M')}（サイトのタイムゾーン）")
 
-            _wp_use_blocks = st.radio(
+            _wp_fmt = st.radio(
                 "エディタ形式",
-                ["クラシック（HTML）", "ブロック（Gutenberg）"],
+                ["ブロック（Gutenberg）", "クラシック（HTML）"],
                 horizontal=True,
                 key="wp_editor_format",
-            ) == "ブロック（Gutenberg）"
+            )
+            st.session_state["_wp_format_user_set"] = True
+            _wp_use_blocks = _wp_fmt == "ブロック（Gutenberg）"
 
             _btn_label = f"📅 {_dt.datetime.combine(_sched_date, _sched_time).strftime('%m/%d %H:%M')} に予約投稿" if _schedule else "📤 WordPress に投稿する"
             if st.button(_btn_label, type="primary", key="wp_publish_btn", use_container_width=True):
