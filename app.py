@@ -168,6 +168,7 @@ for key, default in [
     ("update_checked", False),
     ("update_check_result", None),
     ("save_success", False),
+    ("wp_editor_format", "ブロック（Gutenberg）"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
