@@ -136,6 +136,10 @@ st.markdown(
     .main-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
     .article-title { font-size: 1.4rem; font-weight: 700; }
     div[data-testid="stStatusWidget"] { display: none; }
+    div[data-testid="stDeployButton"] { display: none; }
+    .stDeployButton { display: none; }
+    [data-testid="stToolbarActions"] { display: none; }
+    header button[kind="header"] { display: none; }
     div[data-testid="toastContainer"] { top: auto !important; bottom: 1rem; }
     section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:first-child button > div,
     div[role="dialog"] div[data-testid="stHorizontalBlock"] > div:first-child button > div {
