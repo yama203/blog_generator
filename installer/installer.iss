@@ -50,7 +50,7 @@ Source: "..\AppIcon.ico"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\AppIcon.ico"
 Name: "{group}\{#MyAppName} のアンインストール"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\AppIcon.ico"; Tasks: desktopicon
+Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\AppIcon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "cmd.exe"; Parameters: "/c ""{app}\{#MyAppExeName}"""; Description: "{#MyAppName} を起動する"; Flags: postinstall nowait skipifsilent
