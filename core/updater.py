@@ -17,13 +17,14 @@ _SKIP_PREFIXES = (
     ".venv/",
     ".python/",
     ".uv",
+    "uv.exe",
     "__pycache__/",
     "config.json",
     ".DS_Store",
     ".git/",
     ".claude/",
     "launcher/",
-    "AIブログジェネレーター.app/",
+    "AI Blog Generator.app/",
 )
 
 

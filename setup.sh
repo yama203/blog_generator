@@ -2,7 +2,7 @@
 set -e
 
 echo "================================================"
-echo "  AI ブログジェネレーター セットアップ"
+echo "  AI Blog Generator セットアップ"
 echo "================================================"
 echo ""
 
@@ -42,5 +42,5 @@ echo "  1. Ollama をインストール (まだの場合)"
 echo "     https://ollama.ai"
 echo ""
 echo "  2. アプリを再起動してください"
-echo "     AIブログジェネレーター.app をダブルクリック"
+echo "     "AI Blog Generator.app" をダブルクリック"
 echo ""

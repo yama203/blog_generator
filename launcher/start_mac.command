@@ -15,7 +15,7 @@ else
     exit 1
 fi
 
-echo "✅ AI ブログジェネレーターを起動しています..."
+echo "✅ AI Blog Generatorを起動しています..."
 echo "   ブラウザが自動で開きます。"
 echo "   終了するにはこのウィンドウを閉じてください。"
 echo ""

@@ -132,7 +132,7 @@ from core.updater import (
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="AI ブログジェネレーター",
+    page_title="AI Blog Generator",
     page_icon="✍️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -513,7 +513,7 @@ with st.sidebar:
                 "**Shopify 管理画面でカスタムアプリを作成してトークンを発行します。**\n\n"
                 "1. Shopify 管理画面にログイン\n"
                 "2. 左メニュー **「アプリ管理」→「アプリを開発」**\n"
-                "3. **「カスタムアプリを作成」** → アプリ名を入力（例: AIブログジェネレーター）\n"
+                "3. **「カスタムアプリを作成」** → アプリ名を入力（例: AI Blog Generator）\n"
                 "4. **「Admin API スコープを設定する」** をクリック\n"
                 "5. 以下のスコープにチェックを入れて **「保存」**\n"
                 "   - `write_content`（ブログ記事の投稿・編集）\n"
@@ -671,7 +671,7 @@ with st.sidebar:
 # CREATE MODE
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.ui_mode == "create":
-    st.markdown('<p class="main-title">✍️ AI ブログジェネレーター</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-title">✍️ AI Blog Generator</p>', unsafe_allow_html=True)
     st.caption("キーワードを入力するだけで、AIがブログ記事（本文＋画像）を自動生成します。")
 
     # ── Input form ─────────────────────────────────────────────────────────────

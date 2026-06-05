@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================
-#  create_app.sh — AIブログジェネレーター.app を作成します
+#  create_app.sh — AI Blog Generator.app を作成します
 #  実行方法: bash create_app.sh
 # ============================================================
 set -e
 
-APP_NAME="AIブログジェネレーター"
+APP_NAME="AI Blog Generator"
 APP_BUNDLE="${APP_NAME}.app"
 MACOS_DIR="${APP_BUNDLE}/Contents/MacOS"
 RES_DIR="${APP_BUNDLE}/Contents/Resources"
@@ -83,7 +83,7 @@ PROJECT_DIR="$(cat "${BUNDLE_RES}/project_path.txt" 2>/dev/null | tr -d '[:space
 
 # ── プロジェクトフォルダが存在しない場合は ~/Documents に展開 ──
 if [ -z "$PROJECT_DIR" ] || [ ! -d "$PROJECT_DIR" ]; then
-    PROJECT_DIR="$HOME/Documents/AIブログジェネレーター"
+    PROJECT_DIR="$HOME/Documents/AI Blog Generator"
     mkdir -p "$PROJECT_DIR"
     printf "%s" "$PROJECT_DIR" > "${BUNDLE_RES}/project_path.txt" 2>/dev/null || true
 fi
@@ -121,7 +121,7 @@ for p in /usr/local/bin/ollama /opt/homebrew/bin/ollama /usr/bin/ollama; do
 done
 
 if [ -z "$OLLAMA" ]; then
-    BTN=$(osascript -e 'button returned of (display dialog "Ollama がインストールされていません。\n\nOllama は AI テキスト生成エンジンです。\nインストールページを開きますか？" buttons {"キャンセル", "インストールページを開く"} default button "インストールページを開く" with icon caution with title "AI ブログジェネレーター")')
+    BTN=$(osascript -e 'button returned of (display dialog "Ollama がインストールされていません。\n\nOllama は AI テキスト生成エンジンです。\nインストールページを開きますか？" buttons {"キャンセル", "インストールページを開く"} default button "インストールページを開く" with icon caution with title "AI Blog Generator")')
     [ "$BTN" = "インストールページを開く" ] && open "https://ollama.ai"
     exit 0
 fi
@@ -139,7 +139,7 @@ if [ ! -x "$UV" ]; then
     # アーキテクチャに合ったバイナリが同梱されていない場合はダウンロード
     UV="$PROJECT_DIR/.uv"
     if [ ! -x "$UV" ]; then
-        osascript -e 'display notification "uv をダウンロード中..." with title "AI ブログジェネレーター"'
+        osascript -e 'display notification "uv をダウンロード中..." with title "AI Blog Generator"'
         if [ "$ARCH" = "arm64" ]; then
             UV_URL="https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz"
         else
@@ -156,7 +156,7 @@ if [ ! -x "$UV" ]; then
 fi
 
 if [ ! -x "$UV" ]; then
-    osascript -e 'display dialog "セットアップツール（uv）のダウンロードに失敗しました。\n\nインターネット接続を確認してから再起動してください。" buttons {"OK"} with icon stop with title "AI ブログジェネレーター"'
+    osascript -e 'display dialog "セットアップツール（uv）のダウンロードに失敗しました。\n\nインターネット接続を確認してから再起動してください。" buttons {"OK"} with icon stop with title "AI Blog Generator"'
     exit 1
 fi
 
@@ -176,7 +176,7 @@ elif ! PYTHONPATH="$VENV_SITE" "$PYTHON3" -c "import streamlit" 2>/dev/null; the
 fi
 
 if [ "$NEEDS_SETUP" = true ]; then
-    osascript -e 'display dialog "初めての起動です。\n\n必要なパッケージを自動でインストールします（5〜10分かかる場合があります）。\nターミナルが開きますのでそのままお待ちください。\n\n完了後にもう一度アプリをダブルクリックしてください。" buttons {"OK"} default button "OK" with title "AI ブログジェネレーター"'
+    osascript -e 'display dialog "初めての起動です。\n\n必要なパッケージを自動でインストールします（5〜10分かかる場合があります）。\nターミナルが開きますのでそのままお待ちください。\n\n完了後にもう一度アプリをダブルクリックしてください。" buttons {"OK"} default button "OK" with title "AI Blog Generator"'
     rm -rf "$PROJECT_DIR/.venv"
     osascript -e "tell application \"Terminal\"
         do script \"cd '$PROJECT_DIR' && '$UV' python install 3.12 && '$UV' venv .venv --python 3.12 && '$UV' pip install -r requirements.txt && echo '\\n✅ セットアップ完了。このウィンドウを閉じてアプリをもう一度ダブルクリックしてください。'\"
@@ -242,9 +242,9 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << 'PLIST'
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>AIブログジェネレーター</string>
+  <string>AI Blog Generator</string>
   <key>CFBundleDisplayName</key>
-  <string>AI ブログジェネレーター</string>
+  <string>AI Blog Generator</string>
   <key>CFBundleExecutable</key>
   <string>launch</string>
   <key>CFBundleIdentifier</key>

@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ── Mac: .app バンドルを作成して ZIP ──────────────────────────
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pillow
+        run: pip3 install Pillow --break-system-packages 2>/dev/null || pip3 install Pillow
+
+      - name: Create .app bundle
+        run: bash create_app.sh
+
+      - name: Zip .app
+        run: zip -r "AI Blog Generator.zip" "AI Blog Generator.app"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-app
+          path: "AI Blog Generator.zip"
+
+  # ── Windows: Inno Setup インストーラーを作成 ──────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pillow
+        run: pip install Pillow
+
+      - name: Generate AppIcon.ico
+        run: python generate_icon.py --ico
+
+      - name: Download uv for Windows (x64)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $url -OutFile "uv.zip" -UseBasicParsing
+          Expand-Archive -Path "uv.zip" -DestinationPath "uv_extract" -Force
+          $uvExe = Get-ChildItem -Path "uv_extract" -Recurse -Filter "uv.exe" | Select-Object -First 1
+          Copy-Item $uvExe.FullName -Destination "uv.exe"
+          Remove-Item "uv.zip", "uv_extract" -Recurse -Force
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content VERSION).Trim()
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer\installer.iss
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer\Output\*.exe
+
+  # ── Release: 両アーティファクトを GitHub Release に添付 ───────
+  release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Download Mac artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-app
+          path: dist/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            dist/*.zip \
+            dist/*.exe

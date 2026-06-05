@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-generate_icon.py — AIブログジェネレーター .app 用アイコンを生成します
-出力: AppIcon.icns
+generate_icon.py — AI Blog Generator アイコンを生成します
+  デフォルト: AppIcon.icns (macOS)
+  --ico フラグ指定時: AppIcon.ico (Windows)
 """
 import math
 import os
 import shutil
 import subprocess
+import sys
 
 from PIL import Image, ImageDraw
 
@@ -129,6 +131,17 @@ def create_icns(dest: str = "AppIcon.icns") -> str:
     return dest
 
 
+def create_ico(dest: str = "AppIcon.ico") -> str:
+    base = _draw(256)
+    sizes = [16, 32, 48, 64, 128, 256]
+    imgs = [base.resize((s, s), Image.LANCZOS) for s in sizes]
+    imgs[0].save(dest, format="ICO", append_images=imgs[1:])
+    return dest
+
+
 if __name__ == "__main__":
-    out = create_icns()
+    if "--ico" in sys.argv:
+        out = create_ico()
+    else:
+        out = create_icns()
     print(f"✅ {out} を作成しました")
