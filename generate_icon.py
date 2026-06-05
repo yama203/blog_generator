@@ -144,4 +144,4 @@ if __name__ == "__main__":
         out = create_ico()
     else:
         out = create_icns()
-    print(f"✅ {out} を作成しました")
+    print(f"Done: {out}")

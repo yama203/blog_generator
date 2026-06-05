@@ -37,6 +37,8 @@ jobs:
         run: pip install Pillow
 
       - name: Generate AppIcon.ico
+        env:
+          PYTHONUTF8: "1"
         run: python generate_icon.py --ico
 
       - name: Download uv for Windows (x64)
