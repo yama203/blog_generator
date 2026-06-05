@@ -44,6 +44,7 @@ Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\VERSION"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\core\*"; DestDir: "{app}\core"; Flags: ignoreversion recursesubdirs
 Source: "..\launcher\start_windows.bat"; DestDir: "{app}\launcher"; Flags: ignoreversion
+Source: "..\launcher\start_windows.ps1"; DestDir: "{app}\launcher"; Flags: ignoreversion
 Source: "..\uv.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AppIcon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
