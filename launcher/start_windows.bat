@@ -45,6 +45,11 @@ if not defined UV (
     )
 )
 
+:: ── uv のデータ/Python インストール先をアプリ内に固定 ────────
+:: （OneDrive やネットワークドライブ上のパスでの os error 448 を回避）
+set "UV_DATA_DIR=%PROJECT_DIR%\.uv_data"
+set "UV_PYTHON_INSTALL_DIR=%PROJECT_DIR%\.python"
+
 :: ── First-run setup ──────────────────────────────────────────
 if not exist ".venv\Scripts\python.exe" (
     echo 初回セットアップ中です（5〜10分かかる場合があります）...
