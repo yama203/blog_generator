@@ -141,20 +141,18 @@ Write-Host "Browser will open automatically."
 Write-Host "Close this window to stop the app."
 Write-Host ""
 
-# --- Browser opener (background hidden PS window) -------------
-$openerScript = @"
-for (`$i = 0; `$i -lt 30; `$i++) {
-    Start-Sleep 1
-    try {
-        Invoke-WebRequest -Uri 'http://localhost:$PORT/_stcore/health' -UseBasicParsing -TimeoutSec 1 | Out-Null
-        Start-Process 'http://localhost:$PORT'
-        break
-    } catch {}
-}
-"@
-$openerFile = Join-Path $env:TEMP "ai_blog_opener.ps1"
-$openerScript | Out-File -FilePath $openerFile -Encoding utf8
-Start-Process powershell.exe -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-File", $openerFile
+# --- Browser opener (background job) -------------------------
+$null = Start-Job -ScriptBlock {
+    param($port)
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep 1
+        try {
+            Invoke-WebRequest -Uri "http://localhost:$port/_stcore/health" -UseBasicParsing -TimeoutSec 1 | Out-Null
+            Start-Process "http://localhost:$port"
+            break
+        } catch {}
+    }
+} -ArgumentList $PORT
 
 # --- Start Streamlit (foreground) -----------------------------
 $streamlit = Join-Path $venvScripts "streamlit.exe"

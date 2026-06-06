@@ -1,9 +1,12 @@
+import platform
 import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+
+IS_WINDOWS = platform.system() == "Windows"
 
 from core.assembler import assemble_markdown
 from core.exporter import to_shopify_zip, to_wordpress_zip
@@ -191,11 +194,14 @@ if st.session_state.get("wp_editor_format") != "ブロック（Gutenberg）" and
 
 # APIキーが保存済みならテキスト生成のデフォルトをOpenAIにする（初回のみ）
 if "text_engine_radio" not in st.session_state:
-    import os as _os_init
-    _has_api_key = bool(load_openai_key() or _os_init.environ.get("OPENAI_API_KEY", ""))
-    st.session_state["text_engine_radio"] = (
-        "OpenAI (GPT-4o-mini)" if _has_api_key else "Ollama（ローカル）"
-    )
+    if IS_WINDOWS:
+        st.session_state["text_engine_radio"] = "OpenAI (GPT-4o-mini)"
+    else:
+        import os as _os_init
+        _has_api_key = bool(load_openai_key() or _os_init.environ.get("OPENAI_API_KEY", ""))
+        st.session_state["text_engine_radio"] = (
+            "OpenAI (GPT-4o-mini)" if _has_api_key else "Ollama（ローカル）"
+        )
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -213,7 +219,7 @@ with st.sidebar:
             st.rerun()
         st.markdown('<div style="height:0.3rem"></div>', unsafe_allow_html=True)
 
-    ollama_ok = check_ollama_connection()
+    ollama_ok = False if IS_WINDOWS else check_ollama_connection()
     text_model = list(RECOMMENDED_MODELS.keys())[0]
 
     image_quality = "標準"
@@ -236,7 +242,7 @@ with st.sidebar:
             _key_col, _del_col = st.columns([3, 1])
             with _key_col:
                 if st.button("💾 保存", key="save_key", use_container_width=True,
-                             help="入力したキーをこのMacに保存します"):
+                             help="入力したキーをこのPCに保存します"):
                     if openai_api_key:
                         save_openai_key(openai_api_key)
                         st.success("保存しました", icon="✅")
@@ -285,63 +291,71 @@ with st.sidebar:
                 st.caption("テキスト生成（GPT-4o-mini）・画像生成で使用します")
 
     with st.expander("🤖 テキスト生成", expanded=True):
-        text_engine = st.radio(
-            "エンジン",
-            ["Ollama（ローカル）", "OpenAI (GPT-4o-mini)"],
-            key="text_engine_radio",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        use_openai_text = text_engine == "OpenAI (GPT-4o-mini)"
-
-        if use_openai_text:
+        if IS_WINDOWS:
+            # Windows では OpenAI のみ（Ollama は非対応）
+            use_openai_text = True
             if openai_api_key:
                 st.caption("✅ API キー設定済み")
             else:
                 st.warning("「🔑 OpenAI API キー」欄でキーを設定してください。", icon="⚠️")
         else:
-            if ollama_ok:
-                st.caption("✅ Ollama 接続中")
-                available_models = list_ollama_models()
-                if available_models:
-                    text_model = st.selectbox("使用するモデル", available_models, label_visibility="visible")
-                else:
-                    st.warning("モデルがありません。まず下のメニューからダウンロードしてください。", icon="⚠️")
-            else:
-                st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
-
-        if not use_openai_text:
-            st.caption("モデルを追加")
-            already = set(list_ollama_models()) if ollama_ok else set()
-            model_choice = st.selectbox(
-                "追加するモデル",
-                list(RECOMMENDED_MODELS.keys()),
-                format_func=lambda m: (
-                    f"{'✅ ' if m in already else ''}{m}  —  {RECOMMENDED_MODELS[m]}"
-                ),
-                key="pull_model_select",
+            text_engine = st.radio(
+                "エンジン",
+                ["Ollama（ローカル）", "OpenAI (GPT-4o-mini)"],
+                key="text_engine_radio",
+                horizontal=True,
                 label_visibility="collapsed",
             )
-            if not ollama_ok:
-                st.info("Ollama が起動していないとダウンロードできません。")
-            elif model_choice in already:
-                st.info(f"{model_choice} はインストール済みです。")
+            use_openai_text = text_engine == "OpenAI (GPT-4o-mini)"
+
+            if use_openai_text:
+                if openai_api_key:
+                    st.caption("✅ API キー設定済み")
+                else:
+                    st.warning("「🔑 OpenAI API キー」欄でキーを設定してください。", icon="⚠️")
             else:
-                if st.button("⬇️ ダウンロード開始", key="pull_btn", use_container_width=True):
-                    with st.status(f"{model_choice} をダウンロード中...", expanded=True) as dl_status:
-                        progress_bar = st.progress(0.0)
-                        status_text = st.empty()
-                        try:
-                            for update in pull_model(model_choice):
-                                msg = update.get("status", "")
-                                if "total" in update and "completed" in update and update["total"] > 0:
-                                    pct = update["completed"] / update["total"]
-                                    progress_bar.progress(min(pct, 1.0))
-                                status_text.caption(msg)
-                            dl_status.update(label=f"✅ {model_choice} のダウンロード完了", state="complete")
-                            st.rerun()
-                        except Exception as e:
-                            dl_status.update(label="❌ ダウンロード失敗", state="error")
+                if ollama_ok:
+                    st.caption("✅ Ollama 接続中")
+                    available_models = list_ollama_models()
+                    if available_models:
+                        text_model = st.selectbox("使用するモデル", available_models, label_visibility="visible")
+                    else:
+                        st.warning("モデルがありません。まず下のメニューからダウンロードしてください。", icon="⚠️")
+                else:
+                    st.error("Ollama に接続できません。\nOllama を起動してください。", icon="❌")
+
+            if not use_openai_text:
+                st.caption("モデルを追加")
+                already = set(list_ollama_models()) if ollama_ok else set()
+                model_choice = st.selectbox(
+                    "追加するモデル",
+                    list(RECOMMENDED_MODELS.keys()),
+                    format_func=lambda m: (
+                        f"{'✅ ' if m in already else ''}{m}  —  {RECOMMENDED_MODELS[m]}"
+                    ),
+                    key="pull_model_select",
+                    label_visibility="collapsed",
+                )
+                if not ollama_ok:
+                    st.info("Ollama が起動していないとダウンロードできません。")
+                elif model_choice in already:
+                    st.info(f"{model_choice} はインストール済みです。")
+                else:
+                    if st.button("⬇️ ダウンロード開始", key="pull_btn", use_container_width=True):
+                        with st.status(f"{model_choice} をダウンロード中...", expanded=True) as dl_status:
+                            progress_bar = st.progress(0.0)
+                            status_text = st.empty()
+                            try:
+                                for update in pull_model(model_choice):
+                                    msg = update.get("status", "")
+                                    if "total" in update and "completed" in update and update["total"] > 0:
+                                        pct = update["completed"] / update["total"]
+                                        progress_bar.progress(min(pct, 1.0))
+                                    status_text.caption(msg)
+                                dl_status.update(label=f"✅ {model_choice} のダウンロード完了", state="complete")
+                                st.rerun()
+                            except Exception as e:
+                                dl_status.update(label="❌ ダウンロード失敗", state="error")
                             st.error(str(e))
 
     with st.expander("🎨 画像生成設定"):
