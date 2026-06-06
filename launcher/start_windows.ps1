@@ -141,9 +141,25 @@ Write-Host "Browser will open automatically."
 Write-Host "Close this window to stop the app."
 Write-Host ""
 
-# --- Start Streamlit (foreground) -----------------------------
-# headless=false でStreamlit自身がブラウザを自動で開く
+# --- Verify streamlit is installed ----------------------------
 $streamlit = Join-Path $venvScripts "streamlit.exe"
-& $streamlit run app.py --browser.gatherUsageStats false --server.port $PORT
+if (-not (Test-Path $streamlit)) {
+    Write-Host "streamlit.exe not found. Reinstalling packages..."
+    & $UV pip install -r requirements.txt
+    if (-not (Test-Path $streamlit)) {
+        Write-Host "ERROR: Package installation failed."
+        Write-Host "Path checked: $streamlit"
+        Read-Host "Press Enter to close"
+        exit 1
+    }
+}
+
+Write-Host "Streamlit: $streamlit"
+Write-Host "Working dir: $(Get-Location)"
+Write-Host ""
+
+# --- Start Streamlit via python -m (more reliable than .exe) --
+$python = Join-Path $venvScripts "python.exe"
+& $python -m streamlit run app.py --browser.gatherUsageStats false --server.port $PORT
 
 Read-Host "Finished. Press Enter to close"
