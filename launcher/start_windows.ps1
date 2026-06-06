@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 
 $APP_NAME   = "AI Blog Generator"
 $PORT       = 8501
@@ -141,21 +141,9 @@ Write-Host "Browser will open automatically."
 Write-Host "Close this window to stop the app."
 Write-Host ""
 
-# --- Browser opener (background job) -------------------------
-$null = Start-Job -ScriptBlock {
-    param($port)
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep 1
-        try {
-            Invoke-WebRequest -Uri "http://localhost:$port/_stcore/health" -UseBasicParsing -TimeoutSec 1 | Out-Null
-            Start-Process "http://localhost:$port"
-            break
-        } catch {}
-    }
-} -ArgumentList $PORT
-
 # --- Start Streamlit (foreground) -----------------------------
+# headless=false でStreamlit自身がブラウザを自動で開く
 $streamlit = Join-Path $venvScripts "streamlit.exe"
-& $streamlit run app.py --server.headless true --browser.gatherUsageStats false --server.port $PORT
+& $streamlit run app.py --browser.gatherUsageStats false --server.port $PORT
 
 Read-Host "Finished. Press Enter to close"
