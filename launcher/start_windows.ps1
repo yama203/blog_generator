@@ -154,12 +154,37 @@ if (-not (Test-Path $streamlit)) {
     }
 }
 
-Write-Host "Streamlit: $streamlit"
-Write-Host "Working dir: $(Get-Location)"
+$python = Join-Path $venvScripts "python.exe"
+Write-Host "Streamlit : $streamlit"
+Write-Host "Python    : $python"
+Write-Host "WorkingDir: $(Get-Location)"
 Write-Host ""
 
-# --- Start Streamlit via python -m (more reliable than .exe) --
-$python = Join-Path $venvScripts "python.exe"
-& $python -m streamlit run app.py --browser.gatherUsageStats false --server.port $PORT
+# --- Python sanity check --------------------------------------
+Write-Host "Checking Python..."
+$pyVer = & $python --version 2>&1
+Write-Host "Python: $pyVer"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Python did not run. The venv may be broken."
+    Write-Host "Deleting .venv and restarting setup on next launch..."
+    Remove-Item (Join-Path $PROJECT_DIR ".venv") -Recurse -Force -ErrorAction SilentlyContinue
+    Read-Host "Press Enter to close, then relaunch the app"
+    exit 1
+}
+
+# --- Open browser after fixed delay (cmd trick, no PS jobs) ---
+$url = "http://localhost:$PORT"
+Start-Process -FilePath "cmd.exe" `
+    -ArgumentList "/c", "timeout /t 6 /nobreak >nul && start $url" `
+    -WindowStyle Hidden
+
+# --- Start Streamlit ------------------------------------------
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8       = "1"
+Write-Host "Starting Streamlit..."
+& $python -u -m streamlit run app.py `
+    --server.headless true `
+    --browser.gatherUsageStats false `
+    --server.port $PORT
 
 Read-Host "Finished. Press Enter to close"
